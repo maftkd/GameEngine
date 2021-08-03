@@ -202,6 +202,13 @@ struct vec4{
 		points[3]=d;
 		copyVals();
 	}
+	void operator=(vec4 a){
+		points[0]=a.points[0];
+		points[1]=a.points[1];
+		points[2]=a.points[2];
+		points[3]=a.points[3];
+		copyVals();
+	}
 	vec4(float a){
 		points[0]=a;
 		points[1]=a;
@@ -327,6 +334,15 @@ struct vec4{
 vec4 operator+(vec4 a, vec4 b){
 	vec4 sum(a.x+b.x,a.y+b.y,a.z+b.z,a.w+b.w);
 	return sum;
+}
+
+vec4 invertColor(vec4 c,bool invertAlpha=false){
+	vec4 inverted;
+	inverted.setx(1-c.x);
+	inverted.sety(1-c.y);
+	inverted.setz(1-c.z);
+	inverted.setw(invertAlpha?1-c.w : c.w);
+	return inverted;
 }
 
 struct mat4{

@@ -1,0 +1,10 @@
+***ENGINE DOCUMENTATION**
+
+screen variables:
+-vec2 screenSize
+
+input variables:
+...
+
+rendering functions:
+-void setClearColor(vec4 color)

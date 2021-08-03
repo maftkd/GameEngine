@@ -2,24 +2,31 @@
 #define UNICODE
 #endif
  
+//globals
+float deltaTime;
+float targetDeltaTime=0.016667f;
+bool frameSync=true;
+bool rendering=true;
+bool running=true;
+//#todo use these
+int targetScreenWidth=1920;
+int targetScreenHeight=1080;
+
 #include "input.h"
+#include "game.h"
 #include <assert.h>
 #include <thread>
 #include <chrono>
 
-//frame timing
-float deltaTime;
+//cpu timers
 std::chrono::duration<float> dt;//tmp
 std::chrono::system_clock::time_point prevFrameStart;
 std::chrono::system_clock::time_point frameStart;
-std::chrono::system_clock::time_point frameEnd;
-float TICK=0.0167f;//60fps
-//float TICK=0.0327f;//30fps
-float TICK_FUDGE=0.009f;
+std::chrono::system_clock::time_point tempTimePoint;
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow){
-
-	//open up ze terminal
+	//#todo make a console for logging within the main window
+	//get a console for logging stuff
 	AllocConsole();
 	freopen("CONOUT$", "w", stdout);
 	printf("Hello ! And thank you for testing this software :)\n");
@@ -39,12 +46,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 			CLASS_NAME,						//Windows class
 			L"idk man",	//Window text
 			WS_OVERLAPPEDWINDOW,			//Window style
-			//WS_POPUPWINDOW,
-			//WS_POPUPWINDOW,
-			//Size and position
-			//CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-			CW_USEDEFAULT, CW_USEDEFAULT, 1600, 900,
-			//CW_USEDEFAULT, CW_USEDEFAULT, 1920, 1080,
+			CW_USEDEFAULT, CW_USEDEFAULT, targetScreenWidth, targetScreenHeight,
 			NULL,		//Parent window
 			NULL,		//Menu
 			hInstance,	//Instance handle
@@ -54,9 +56,26 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 		return 0;
 	ShowWindow(hwnd, nCmdShow);
 
+	initRenderer(hwnd,targetScreenWidth,targetScreenHeight);
+
+	//start render thread
+	DWORD renderThreadId;
+	HANDLE renderThreadHandle = CreateThread(
+			NULL,
+			0,
+			renderThread,
+			0,
+			0,
+			&renderThreadId);
+
+	if(renderThreadHandle==NULL){
+		return 0;
+	}
+
 	MSG msg = { };
-	while(true){
+	while(running){
 		//start frame
+		printf("*frame start\n");
 		frameStart = std::chrono::system_clock::now();
 		dt=frameStart-prevFrameStart;
 		deltaTime = dt.count();
@@ -71,29 +90,36 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 			DispatchMessage(&msg);
 		}
 
-		//do stuff
-
-		//end frame
-		frameEnd = std::chrono::system_clock::now();
-		dt = frameEnd-frameStart;
-		float frameTime = dt.count();
-
-		//big sleeps
-		while(frameTime<TICK-TICK_FUDGE){
-			//sleep in increments because big sleeps are inaccurate
-			std::this_thread::sleep_for(std::chrono::microseconds(100));
-			frameEnd = std::chrono::system_clock::now();
-			dt=frameEnd-frameStart;
-			frameTime = dt.count();
-		}
+		//start rendering frame N-1 on "render thread"
+		frameSync=false;//this allows the gpu to begin rendering frame N-1
 		
-		//little sleeps
-		while(frameTime<TICK){
-			frameEnd = std::chrono::system_clock::now();
-			dt=frameEnd-frameStart;
-			frameTime = dt.count();
+		//do game stuff for frame N on "game thread"
+		mainThread();
+
+		//cpu sleep while N-1 finish rendering
+		tempTimePoint = std::chrono::system_clock::now();
+		dt = tempTimePoint-frameStart;
+		float cpuTimer = dt.count();
+		bool profiledPrevFrame=false;
+		while(cpuTimer<targetDeltaTime-0.002f && !frameSync){
+			std::this_thread::sleep_for(std::chrono::microseconds(100));
+			tempTimePoint = std::chrono::system_clock::now();
+			dt = tempTimePoint-frameStart;
+			cpuTimer = dt.count();
+			//gpu profiler
+			if(!profiledPrevFrame)
+				profiledPrevFrame=getGpuTimeStamps(curFrameRenderCommands);//cur frame holds prev frames profile data
 		}
+		while(!frameSync);
+		
+		//swap prev frame timestamp queries into current
+		curFrameRenderCommands.swapTimeStamps(&prevFrameRenderCommands);
+		//copy current frame render commands to previous
+		prevFrameRenderCommands.copy(curFrameRenderCommands);
 	}
+
+	//close render thread
+	CloseHandle(renderThreadHandle);
 
 	return 0;
 }

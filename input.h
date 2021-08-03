@@ -8,6 +8,13 @@
 
 //input variables
 vec2 mousePos;
+short* keyInput;
+
+//#temp input vars
+//later lets put these in keyInput array
+bool wDown=false;
+//#temp more tmp input vars
+bool lmbDown=false;
 
 //window message callback
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
@@ -21,11 +28,12 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
 		case WM_KILLFOCUS:
 			break;
 		case WM_DESTROY:
-			PostQuitMessage(0);
+			rendering=false;
+			running=false;
 			break;
 		case WM_SIZE:
 			screenSize.set(LOWORD(lParam),HIWORD(lParam));
-			handleScreenSizeChange(hwnd,LOWORD(lParam),HIWORD(lParam));
+
 			//size changed
 			if(wParam == SIZE_MINIMIZED){
 				//minimized
@@ -46,17 +54,23 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
 				toggleFullScreen(hwnd);
 			}
 			if (wParam == VK_F4){
-				//PostQuitMessage(0);
-				DestroyWindow(hwnd);
+				rendering=false;
+				running=false;
 			}
 			break;
 		}
 		case WM_KEYDOWN:
 			printf("key down\n");
+			if (wParam == 0x57){
+				wDown=true;
+			}
 			//key down
 			break;
 		case WM_KEYUP:
 			printf("key up\n");
+			if (wParam == 0x57){
+				wDown=false;
+			}
 			//key up
 			break;
 		case WM_MOUSEMOVE:
@@ -73,10 +87,12 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
 			//rmb up
 			break;
 		case WM_LBUTTONDOWN:
-			printf("lmb down\n");
+			//printf("lmb down\n");
+			lmbDown=true;
 			//lmb down
 			break;
 		case WM_LBUTTONUP:
+			lmbDown=false;
 			printf("lmb up\n");
 			//lmb up
 			break;
