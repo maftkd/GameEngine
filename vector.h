@@ -280,14 +280,16 @@ struct vec4{
 		copyVals();
 	}
 
-	//scale
-	/*
 	vec4 operator*(float scalar){
 		vec4 scaled(points[0]*scalar,
-				points[1]*scalar);
+				points[1]*scalar,
+				points[2]*scalar,
+				points[3]*scalar);
 		return scaled;
 	}
 
+	//scale
+	/*
 	void operator*=(float scalar){
 		points[0]*=scalar;
 		points[1]*=scalar;

@@ -8,13 +8,19 @@
 
 //input variables
 vec2 mousePos;
-short* keyInput;
+char keyInput[90];//0 is idle, 1 is down, 2 is pressed, 3 is released
 
 //#temp input vars
-//later lets put these in keyInput array
-bool wDown=false;
-//#temp more tmp input vars
 bool lmbDown=false;
+
+void updateKeys(){
+	for(int i=0; i<90; i++){
+		if(keyInput[i]==1)//key down
+			keyInput[i]=2;//key pressed
+		else if(keyInput[i]==3)//key released
+			keyInput[i]=0;
+	}
+}
 
 //window message callback
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
@@ -61,16 +67,12 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
 		}
 		case WM_KEYDOWN:
 			printf("key down\n");
-			if (wParam == 0x57){
-				wDown=true;
-			}
-			//key down
+			if(keyInput[wParam]==0)
+				keyInput[wParam]=1;
 			break;
 		case WM_KEYUP:
 			printf("key up\n");
-			if (wParam == 0x57){
-				wDown=false;
-			}
+			keyInput[wParam]=3;
 			//key up
 			break;
 		case WM_MOUSEMOVE:

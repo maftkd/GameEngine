@@ -81,6 +81,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 		deltaTime = dt.count();
 		prevFrameStart=frameStart;
 
+		//reset input
+		updateKeys();
 		//get input
 		while(PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)){
 			if(msg.message == WM_QUIT){

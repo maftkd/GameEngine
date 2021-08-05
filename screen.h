@@ -47,19 +47,6 @@ void initRenderBuffers(int width, int height){
 		printf("1-failed creating first pass target view %x\n", hr);
 }
 
-void handleResize(int w, int h){
-	if(swapChain!=NULL){
-		printf("resizing\n");
-		frameBuffer->Release();
-		renderTarget->Release();
-		hr = swapChain->ResizeBuffers(0,0,0,DXGI_FORMAT_UNKNOWN,0);
-		if(FAILED(hr))
-			printf("error resizing buffers %x\n",hr);
-		//re-init
-		initRenderBuffers(w,h);
-	}
-}
-
 void toggleFullScreen(HWND hwnd){
 	fullScreen=!fullScreen;
 	printf("Toggling fullScreen %d\n",fullScreen);
@@ -73,7 +60,6 @@ void toggleFullScreen(HWND hwnd){
 		SetWindowLong(hwnd,GWL_STYLE,WS_OVERLAPPEDWINDOW | WS_VISIBLE);
 		SetWindowPos(hwnd,HWND_NOTOPMOST,0,0,targetScreenWidth,targetScreenHeight,0);
 	}
-	handleResize(targetScreenWidth,targetScreenHeight);
 }
 
 void initSwapChain(HWND hwnd){
