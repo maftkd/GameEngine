@@ -14,23 +14,12 @@ bool initD3Buffers=false;
 ID3D11Device* device= NULL;
 ID3D11DeviceContext* deviceContext= NULL;
 IDXGISwapChain* swapChain= NULL;
-//D3D11_VIEWPORT viewport = {0};
 
 //textures
 ID3D11Texture2D* frameBuffer;
 ID3D11RenderTargetView* renderTarget = NULL;
 
 void initRenderBuffers(int width, int height){
-	//create viewports
-	/*
-	viewport = {
-	  0.0f,
-	  0.0f,
-	  ( FLOAT )( width ),
-	  ( FLOAT )( height ),
-	  0.0f,
-	  1.0f };
-	  */
 
 	//create a frame buffer
 	HRESULT hr = swapChain->GetBuffer(
@@ -100,7 +89,6 @@ void initSwapChain(HWND hwnd){
 
 void clearRenderTarget(vec4 col){
 	deviceContext->OMSetRenderTargets( 1, &renderTarget, nullptr );
-	//deviceContext->RSSetViewports( 1, &viewport );
 	deviceContext->ClearRenderTargetView(renderTarget, col.points );
 }
 
@@ -156,7 +144,7 @@ bool getGpuTimeStamps(renderCommands rc){
 			deviceContext->GetData(rc.end, &frameEnd, sizeof(UINT64), 0);
 			float denom = float(tsDisjoint.Frequency);
 			float gpuTimer = float(frameEnd-frameStart)/denom;
-			printf("-GPU dt: %f\n",gpuTimer);
+			//printf("-GPU dt: %f\n",gpuTimer);
 		}
 		return true;
 	}

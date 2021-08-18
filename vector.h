@@ -719,12 +719,36 @@ struct vec2{
 		return sqrt(dt);
 		//return Q_rsqrt(dt);
 	}
+	void setx(float x1){
+		x=x1;
+		points[0]=x;
+	}
+
+	void sety(float y1){
+		y=y1;
+		points[1]=y;
+	}
+
+	void round(){
+		x=(int)x;
+		y=(int)y;
+		points[0]=x;
+		points[1]=y;
+	}
 };
+
 
 //vector2 operator overloads
 vec2 operator-(vec2 a, vec2 b){
 	vec2 diff(a.x-b.x,a.y-b.y);
 	return diff;
+}
+
+float distance(vec2 a, vec2 b){
+	vec2 diff = a-b; 
+	float distSqr=(diff.x*diff.x+diff.y*diff.y);
+	float dist = 1.0f/Q_rsqrt((float)distSqr);
+	return dist;
 }
 
 vec2 operator+(vec2 a, vec2 b){
@@ -740,6 +764,12 @@ vec2 operator*(float scalar,vec2 v){
 
 float dot(vec2 a, vec2 b){
 	return a.x*b.x+a.y*b.y;
+}
+
+vec2 lerp(vec2 a, vec2 b, float t){
+	vec2 lerped(a.x+(b.x-a.x)*t,
+			a.y+(b.y-a.y)*t);
+	return lerped;
 }
 
 //cross not yet defined

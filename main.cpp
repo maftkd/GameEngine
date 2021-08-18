@@ -8,11 +8,16 @@ float targetDeltaTime=0.016667f;
 bool frameSync=true;
 bool rendering=true;
 bool running=true;
-//#todo use these
+char mode = 1;//0 = play mode, 1 = font editor
 int targetScreenWidth=1920;
 int targetScreenHeight=1080;
 
+#include <stdio.h>
+#include <windows.h>
+#include "io.h"
+#include "image.h"
 #include "input.h"
+#include "font.h"
 #include "game.h"
 #include <assert.h>
 #include <thread>
@@ -23,6 +28,30 @@ std::chrono::duration<float> dt;//tmp
 std::chrono::system_clock::time_point prevFrameStart;
 std::chrono::system_clock::time_point frameStart;
 std::chrono::system_clock::time_point tempTimePoint;
+
+void init(){
+	switch(mode){
+		case 0:
+		default:
+			initGame();
+			break;
+		case 1:
+			initFontEditor();
+			break;
+	}
+}
+
+void update(){
+	switch(mode){
+		case 0:
+		default:
+			gameLoop();
+			break;
+		case 1:
+			updateFontEditor();
+			break;
+	}
+}
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow){
 	//#todo make a console for logging within the main window
@@ -72,10 +101,12 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 		return 0;
 	}
 
+	//initialization
+	init();
+
 	MSG msg = { };
 	while(running){
 		//start frame
-		printf("*frame start\n");
 		frameStart = std::chrono::system_clock::now();
 		dt=frameStart-prevFrameStart;
 		deltaTime = dt.count();
@@ -95,8 +126,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 		//start rendering frame N-1 on "render thread"
 		frameSync=false;//this allows the gpu to begin rendering frame N-1
 		
-		//do game stuff for frame N on "game thread"
-		mainThread();
+		//do game stuff for frame N on "main thread"
+		update();
 
 		//cpu sleep while N-1 finish rendering
 		tempTimePoint = std::chrono::system_clock::now();

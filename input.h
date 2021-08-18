@@ -1,8 +1,6 @@
 #ifndef INPUT_H
 #define INPUT_H
 
-#include <stdio.h>
-#include <windows.h>
 #include "vector.h"
 #include "screen.h"
 
@@ -52,7 +50,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
 			//done moving size?
 			break;
 		case WM_CHAR:
-			printf("char typed %x\n",wParam);
+			//printf("char typed %x\n",wParam);
 			//char pressed
 			break;
 		case WM_SYSKEYDOWN: {
@@ -66,18 +64,16 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
 			break;
 		}
 		case WM_KEYDOWN:
-			printf("key down\n");
 			if(keyInput[wParam]==0)
 				keyInput[wParam]=1;
 			break;
 		case WM_KEYUP:
-			printf("key up\n");
 			keyInput[wParam]=3;
 			//key up
 			break;
 		case WM_MOUSEMOVE:
 			mousePos.set(LOWORD(lParam),HIWORD(lParam));
-			printf("mouse move (%d,%d)\n",(int)mousePos.x,(int)mousePos.y);
+			//printf("mouse move (%d,%d)\n",(int)mousePos.x,(int)mousePos.y);
 			//mouse move
 			break;
 		case WM_RBUTTONDOWN:

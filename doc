@@ -1,5 +1,7 @@
 ***ENGINE DOCUMENTATION**
 
+something about modes / design
+
 screen variables:
 -vec2 screenSize
 
