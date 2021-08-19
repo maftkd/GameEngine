@@ -24,6 +24,14 @@ float Q_rsqrt(float number){
 	return y;
 }
 
+float sign(float number){
+	if(number>0)
+		return 1;
+	else if(number<0)
+		return -1;
+	return 0;
+}
+
 struct vec3{
 	float points[3];
 	float x;
@@ -779,6 +787,88 @@ vec2 normal(vec2 v){
 	return norm;
 }
 
+//determine if point p is on right or left of vector v
+float isOnRight(vec2 v, vec2 p){
+	vec3 a = vec3(v.x,v.y,0);
+	vec3 b = vec3(p.x,p.y,0);
+	vec3 c = cross(b,a);
+	return sign(c.z);
+}
+
+float signedDistanceToEdge(vec2 a, vec2 b, vec2 p){
+	float rise = b.y-a.y;
+	float run = b.x-a.x;
+	vec2 pointOnLine;
+	float uDist=-1;
+	//if edge is horizontal
+	if(rise==0){
+		float minX = min(a.x,b.x);
+		float maxX = max(a.x,b.x);
+		if(p.x>=minX && p.x<=maxX)
+		{
+			uDist=fabsf(p.y-a.y);
+			pointOnLine=vec2(p.x,a.y);
+		}
+	}
+	//if edge is vertical
+	else if(run==0){
+		float minY = min(a.y,b.y);
+		float maxY = max(a.y,b.y);
+		if(p.y>=minY && p.y<=maxY)
+		{
+			uDist=fabsf(p.x-a.x);
+			pointOnLine=vec2(a.x,p.y);
+		}
+	}
+	//diagonal edge
+	else{
+		float slope1 = rise/run;
+		float slope2 = -1/slope1;
+		float x = (p.y-a.y+slope1*a.x-slope2*p.x)/(slope1-slope2);
+		float minX = min(a.x,b.x);
+		float maxX = max(a.x,b.x);
+		float minY = min(a.y,b.y);
+		float maxY = max(a.y,b.y);
+		float y = slope1*(x-a.x)+a.y;
+		if(x>=minX && x<=maxX && y>=minY&&y<=maxY){
+			uDist=distance(vec2(x,y),p);
+			pointOnLine=vec2(x,y);
+		}
+	}
+
+	bool withinSegment=uDist>=0;
+	//closest distance will be the distance ap or bp
+	if(!withinSegment)
+	{
+		//determine closest point
+		float distA=distance(a,p);
+		float distB=distance(b,p);
+		vec2 abNorm=(b-a);
+		abNorm.normalize();
+		if(distA<distB)
+		{
+			//scooch point away from corner to prevent corner conflict
+			uDist=distance(p,a+abNorm);
+			pointOnLine=a;
+		}
+		else
+		{
+			uDist=distance(p,b-abNorm);
+			pointOnLine=b;
+		}
+	}
+
+	//calc sign
+	float sign = isOnRight(b-a,p-pointOnLine);
+	if(sign==0)
+		return withinSegment? 0:9999;
+	return uDist*sign;
+	//
+	//return uDist;
+	//temp
+	//return distance(a,p);
+	//return 1;
+}
 
 //hybrid overloads between matrix and vector
 

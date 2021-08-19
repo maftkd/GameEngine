@@ -90,14 +90,16 @@ void sdfTest(simpleGlyph *glyph){
 	//get size and bounds
 	vec2 mainOffset = vec2(-glyph->xMin,-glyph->yMin);//offset based on ttf data
 	vec2 size = vec2(glyph->xMax-glyph->xMin,glyph->yMax-glyph->yMin);
-	float imageScale=0.5f;//overall scale from ttf data
+	float imageScale=0.05f;//overall scale from ttf data
 	float secondaryScale=0.8f;//scale down glyph for padding
 	//scale image down for faster testing
 	size*=imageScale;
+	size.round();
 	printf("mainOffset (%f,%f), size (%f,%f)\n",mainOffset.x,mainOffset.y,size.x,size.y);
 
 	//pad the data so it's centered with some space around the edges
 	vec2 paddingOffset = size*(1-secondaryScale)*0.5f;
+	paddingOffset.round();
 	printf("paddingOffset (%f,%f)\n",paddingOffset.x,paddingOffset.y);
 
 	//allocate byte array for pixel data
@@ -112,7 +114,7 @@ void sdfTest(simpleGlyph *glyph){
 	int* numContourEdgeSegments = new int[numContours];
 	int curPoint=0;
 
-	//go through each contour
+	//go through each contour and gen points
 	for(int i=0;i<numContours; i++){
 		numContourEdgeSegments[i]=1;
 		int start=curPoint;
@@ -171,32 +173,74 @@ void sdfTest(simpleGlyph *glyph){
 		}
 		curPoint=end+1;
 	}
-
-
-	//fill background
-	for(int y=0;y<(int)size.y;y++){
-		for(int x=0;x<(int)size.x;x++){
-			int pixelIndex=y*size.x*4+x*4;
-			pixels[pixelIndex]=0x00;
-			pixels[pixelIndex+1]=255*(y/(float)(size.y-1));
-			pixels[pixelIndex+2]=255*(x/(float)(size.x-1));
-			pixels[pixelIndex+3]=255;
-
-			//int nearPoint=0;
-			//sdf stuff goes here
-		}
-	}
+	
+	//tmp - test
+	printf("testing...\n");
+	contours[0][5].log();
+	contours[0][6].log();
+	
+	//scale and translate points to fit image
 	for(int i=0;i<numContours;i++){
-		for(int j=1; j<numContourEdgeSegments[i];j++){
-			//get prev point
-			vec2 prevPoint = contours[i][j-1]+mainOffset;
-			prevPoint*=imageScale*secondaryScale;
-			prevPoint+=paddingOffset;
-			
-			//get cur point
+		for(int j=0; j<numContourEdgeSegments[i];j++){
 			vec2 point = contours[i][j]+mainOffset;
 			point*=imageScale*secondaryScale;
 			point+=paddingOffset;
+			contours[i][j]=point;
+		}
+	}
+
+	float maxDist=min(paddingOffset.x,paddingOffset.y);
+	//fill pixel array
+	for(int y=0;y<(int)size.y;y++){
+		for(int x=0;x<(int)size.x;x++){
+			int pixelIndex=y*size.x*4+x*4;
+			
+			//sdf stuff goes here
+			float minDist=1000;
+			float minSign=1;
+			int minI, minJ;
+			float samesies=0;
+			vec2 p = vec2(x,y);
+			for(int i=0;i<numContours;i++){
+				for(int j=1; j<numContourEdgeSegments[i];j++){
+					//get prev point
+					vec2 prevPoint = contours[i][j-1];
+					//get cur point
+					vec2 point = contours[i][j];
+					if(prevPoint==point)
+						continue;
+					float md = signedDistanceToEdge(prevPoint,point,p);
+					if(fabsf(md)<minDist)
+					{
+						minDist=fabsf(md);
+						minSign=sign(md);
+						minI=i;
+						minJ=j;
+					}
+					else if(fabsf(md)==minDist)
+						samesies=minDist;
+				}
+			}
+			if(minDist>maxDist)
+				minDist=maxDist;
+			float normDist=(minSign*minDist)/maxDist;
+			normDist=(normDist+1)*0.5f;
+			pixels[pixelIndex]=(int)(255*normDist);
+			pixels[pixelIndex+1]=(int)(255*normDist);
+			pixels[pixelIndex+2]=(int)(255*normDist);
+			pixels[pixelIndex+3]=255;
+		}
+	}
+
+	/*
+	//drawing some lines
+	for(int i=0;i<numContours;i++){
+		for(int j=1; j<numContourEdgeSegments[i];j++){
+			//get prev point
+			vec2 prevPoint = contours[i][j-1];
+			
+			//get cur point
+			vec2 point = contours[i][j];
 
 			//draw line
 			float dist=distance(point,prevPoint);
@@ -213,6 +257,7 @@ void sdfTest(simpleGlyph *glyph){
 			}
 		}
 	}
+	*/
 	exportBitmapBgra("images/glyphA.bmp",size.x,size.y,pixels,numBytes);
 }
 
@@ -517,8 +562,8 @@ void initFontEditor(){
 	printf("initializing font editor yo\n");
 	//loadFont("fonts/Moonrising.ttf");
 	//loadFont("fonts/Gorehand.otf");
-	//loadFont("fonts/Envy Code R.ttf");
-	loadFont("fonts/Grethania Script Reguler.ttf");
+	loadFont("fonts/Envy Code R.ttf");
+	//loadFont("fonts/Grethania Script Reguler.ttf");
 }
 
 void updateFontEditor(){
