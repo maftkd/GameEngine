@@ -76,7 +76,10 @@ typedef struct {
 	short* xCoords;
 	short* yCoords;
 	bool* onCurve;
+	vec2 size;
+	vec2 offset;
 } simpleGlyph;
+
 
 void drawBezier(vec2* contour, int index, int steps, vec2 a, vec2 control, vec2 b){
 	for(int i=0; i<steps; i++){
@@ -86,16 +89,197 @@ void drawBezier(vec2* contour, int index, int steps, vec2 a, vec2 control, vec2 
 	}
 }
 
+//simple func to pack the glyphs in a grid layout
+void fontAtlasTest(simpleGlyph *glyphs){
+	int texSize=1024;
+	float imageScale=0.065;//overall scale from ttf data
+	float secondaryScale=0.75;//scale down glyph for padding
+
+	//get max sizes
+	vec2 max;
+	for(int i=0; i<94;i++){
+		vec2 size = vec2(glyphs[i].xMax-glyphs[i].xMin,glyphs[i].yMax-glyphs[i].yMin);
+		//scale image down for faster testing
+		size*=imageScale;
+		size.round();
+		printf("%d,%f,%f\n",(i+33),size.x,size.y);
+		glyphs[i].size=size;
+		if(glyphs[i].size.x>max.x)
+			max.setx(glyphs[i].size.x);
+		if(glyphs[i].size.y>max.y)
+			max.sety(glyphs[i].size.y);
+	}
+
+	//arrange offsets in a rectilinear fashion
+	float y=0;
+	int iOffset=0;
+	for(int i=0; i<94; i++)
+	{
+		vec2 offset = vec2((i-iOffset)*max.x,y);
+		if(offset.x+glyphs[i].size.x>=texSize){
+			y+=max.y;
+			iOffset=i;
+			offset = vec2((i-iOffset)*max.x,y);
+		}
+		glyphs[i].offset=offset;
+	}
+
+	//generate sdf data and copy to texture data
+	int numPixels=texSize*texSize;
+	int numBytes=numPixels*4;
+	unsigned char* pixels= new unsigned char[numBytes];
+	for(int i=0; i<94; i++){
+		printf("rasterizing %c\n",(i+33));
+		vec2 mainOffset = vec2(-glyphs[i].xMin,-glyphs[i].yMin);//offset based on ttf data
+
+		//pad the data so it's centered with some space around the edges
+		vec2 paddingOffset = glyphs[i].size*(1-secondaryScale)*0.5f;
+		paddingOffset.round();
+		//printf("paddingOffset (%f,%f)\n",paddingOffset.x,paddingOffset.y);
+
+		//break contours into edge segments
+		int bezierCurvePoints=3;
+		int numContours = glyphs[i].numberOfContours;
+		vec2** contours = new vec2*[numContours];
+		int* numContourEdgeSegments = new int[numContours];
+		int curPoint=0;
+
+		//go through each contour and gen points
+		for(int j=0;j<numContours; j++){
+			numContourEdgeSegments[j]=1;
+			int start=curPoint;
+			int end = glyphs[i].endPointsOfContours[j];
+			for(int k=start;k<=end; k++){
+				if(glyphs[i].onCurve[k])
+					numContourEdgeSegments[j]++;
+				else
+					numContourEdgeSegments[j]+=bezierCurvePoints;
+			}
+
+			//allocate enough vec2 for each contour
+			contours[j] = new vec2[numContourEdgeSegments[j]];
+			int counter=0;
+			contours[j][counter]=vec2(glyphs[i].xCoords[start],glyphs[i].yCoords[start]);
+			counter++;
+
+			//determine points on each contour - which will connect into edges
+			for(int k=start+1;k<=end+1;k++){
+				int prev = k-1;
+				int cur = k>end?start : k;
+				int next = cur+1;
+				if(next>end)
+					next-=(end-start)+1;
+			
+				//get glyphs[i] coordinates
+				vec2 prevVec=vec2(glyphs[i].xCoords[prev],glyphs[i].yCoords[prev]);
+				vec2 curVec=vec2(glyphs[i].xCoords[cur],glyphs[i].yCoords[cur]);
+				vec2 nextVec=vec2(glyphs[i].xCoords[next],glyphs[i].yCoords[next]);
+
+				//X-1-X
+				if(glyphs[i].onCurve[cur]){
+					contours[j][counter]=curVec;
+					counter++;
+				}
+				//1-0-0
+				else if(glyphs[i].onCurve[prev]&&!glyphs[i].onCurve[cur]&&!glyphs[i].onCurve[next]){
+					drawBezier(contours[j],counter,bezierCurvePoints,prevVec,curVec,lerp(curVec,nextVec,0.5f));
+					counter+=bezierCurvePoints;
+				}
+				//1-0-1
+				else if(glyphs[i].onCurve[prev]&&!glyphs[i].onCurve[cur]&&glyphs[i].onCurve[next]){
+					drawBezier(contours[j],counter,bezierCurvePoints,prevVec,curVec,nextVec);
+					counter+=bezierCurvePoints;
+				}
+				//0-0-1
+				else if(!glyphs[i].onCurve[prev]&&!glyphs[i].onCurve[cur]&&glyphs[i].onCurve[next]){
+					drawBezier(contours[j],counter,bezierCurvePoints,lerp(prevVec,curVec,0.5f),curVec,nextVec);
+					counter+=bezierCurvePoints;
+				}
+				//0-0-0
+				else if(!glyphs[i].onCurve[prev]&&!glyphs[i].onCurve[cur]&&!glyphs[i].onCurve[next]){
+					drawBezier(contours[j],counter,bezierCurvePoints,lerp(prevVec,curVec,0.5f),curVec,lerp(curVec,nextVec,0.5f));
+					counter+=bezierCurvePoints;
+				}
+			}
+			curPoint=end+1;
+		}
+		
+		//scale and translate points to fit image
+		for(int j=0;j<numContours;j++){
+			for(int k=0; k<numContourEdgeSegments[j];k++){
+				vec2 point = contours[j][k]+mainOffset;
+				point*=imageScale*secondaryScale;
+				point+=paddingOffset;
+				contours[j][k]=point;
+			}
+		}
+
+		float maxDist=min(paddingOffset.x,paddingOffset.y);
+		//fill pixel array
+		int pixelStart=(int)glyphs[i].offset.y*texSize*4+(int)glyphs[i].offset.x*4;
+		printf("size (%f,%f)\n",glyphs[i].size.x,glyphs[i].size.y);
+		printf("offset (%f,%f)\n",glyphs[i].offset.x,glyphs[i].offset.y);
+		printf("filling pixels starting at: %d\n",pixelStart);
+		for(int y=0;y<(int)glyphs[i].size.y;y++){
+			for(int x=0;x<(int)glyphs[i].size.x;x++){
+				//int pixelIndex=y*size.x*4+x*4;
+				int pixelIndex=pixelStart+y*texSize*4+x*4;
+				if(pixelIndex>=numBytes){
+					printf("font data overflowing atlas size. Try a larger atlas\n");
+					return;
+				}
+				
+				//sdf stuff goes here
+				float minDist=1000;
+				float minSign=1;
+				int minI, minJ;
+				float samesies=0;
+				vec2 p = vec2(x,y);
+				for(int j=0;j<numContours;j++){
+					for(int k=1; k<numContourEdgeSegments[j];k++){
+						//get prev point
+						vec2 prevPoint = contours[j][k-1];
+						//get cur point
+						vec2 point = contours[j][k];
+						if(prevPoint==point)
+							continue;
+						float md = signedDistanceToEdge(prevPoint,point,p);
+						if(fabsf(md)<minDist)
+						{
+							minDist=fabsf(md);
+							minSign=sign(md);
+							minI=j;
+							minJ=k;
+						}
+						else if(fabsf(md)==minDist)
+							samesies=minDist;
+					}
+				}
+				if(minDist>maxDist)
+					minDist=maxDist;
+				float normDist=(minSign*minDist)/maxDist;
+				normDist=(normDist+1)*0.5f;
+				pixels[pixelIndex]=(int)(255*normDist);
+				pixels[pixelIndex+1]=(int)(255*normDist);
+				pixels[pixelIndex+2]=(int)(255*normDist);
+				pixels[pixelIndex+3]=255;
+			}
+		}
+	}
+	exportBitmapBgra("images/fontAtlas.bmp",texSize,texSize,pixels,numBytes);
+}
+
 void sdfTest(simpleGlyph *glyph){
 	//get size and bounds
 	vec2 mainOffset = vec2(-glyph->xMin,-glyph->yMin);//offset based on ttf data
 	vec2 size = vec2(glyph->xMax-glyph->xMin,glyph->yMax-glyph->yMin);
-	float imageScale=0.05f;//overall scale from ttf data
-	float secondaryScale=0.8f;//scale down glyph for padding
+	float imageScale=0.1f;//overall scale from ttf data
+	float secondaryScale=0.75f;//scale down glyph for padding
 	//scale image down for faster testing
 	size*=imageScale;
 	size.round();
-	printf("mainOffset (%f,%f), size (%f,%f)\n",mainOffset.x,mainOffset.y,size.x,size.y);
+	//printf("mainOffset (%f,%f), size (%f,%f)\n",mainOffset.x,mainOffset.y,size.x,size.y);
+	printf("%f,%f\n",size.x,size.y);
 
 	//pad the data so it's centered with some space around the edges
 	vec2 paddingOffset = size*(1-secondaryScale)*0.5f;
@@ -173,11 +357,6 @@ void sdfTest(simpleGlyph *glyph){
 		}
 		curPoint=end+1;
 	}
-	
-	//tmp - test
-	printf("testing...\n");
-	contours[0][5].log();
-	contours[0][6].log();
 	
 	//scale and translate points to fit image
 	for(int i=0;i<numContours;i++){
@@ -343,9 +522,9 @@ void loadFont(char* fontName){
 			}
 			printf("num mappings %d\n",numMappings);
 
-			glyphIndices = new unsigned short[126-32+1];//indices for chars 32 - 126
-			for(int j=0; j<95; j++){
-				unsigned short codePoint=j+32;
+			glyphIndices = new unsigned short[126-33+1];//indices for chars 33 - 126
+			for(int j=0; j<94; j++){
+				unsigned short codePoint=j+33;
 				bool glyphFound=false;
 				for(int k=0; k<segCount&&!glyphFound; k++){
 					if(format.endCode[k]>=codePoint){
@@ -432,15 +611,19 @@ void loadFont(char* fontName){
 	//glyph time
 	unsigned int glyphOffset;
 	unsigned short glyphOffsetShort;
-	for(int i=0; i<95; i++){
+	int numGlyphs=94;
+	simpleGlyph* glyphs = new simpleGlyph[numGlyphs];
+	for(int i=0; i<numGlyphs; i++){
 		if(glyphIndices[i]*2>locaLength)
 		{
 			printf("glyph index too high...\n");
 			continue;
 		}
 		//splt
-		if(i+32!=65)
+		/*
+		if(i+32!=46)
 			continue;
+			*/
 		if(head.indexToLocFormat==0)
 		{
 			copyBigEndian(&glyphOffsetShort,fontRaw,locaOffset+glyphIndices[i]*2);
@@ -451,60 +634,59 @@ void loadFont(char* fontName){
 
 		unsigned int gStart = glyphStart+glyphOffset;
 		//assume simple glyph
-		simpleGlyph sg;
-		copyBigEndian(&sg.numberOfContours,fontRaw,gStart);
-		printf("char code: %d\n",(32+i));
-		printf("num contours: %d\n",sg.numberOfContours);
-		copyBigEndian(&sg.xMin,fontRaw,gStart+2);
-		copyBigEndian(&sg.yMin,fontRaw,gStart+4);
-		copyBigEndian(&sg.xMax,fontRaw,gStart+6);
-		copyBigEndian(&sg.yMax,fontRaw,gStart+8);
-		printf("%d,%d,%d,%d\n",sg.xMin,sg.yMin,sg.xMax,sg.yMax);
-		if(sg.numberOfContours<=0)
+		copyBigEndian(&glyphs[i].numberOfContours,fontRaw,gStart);
+		//printf("%d,",(32+i));
+		//printf("num contours: %d\n",glyphs[i].numberOfContours);
+		copyBigEndian(&glyphs[i].xMin,fontRaw,gStart+2);
+		copyBigEndian(&glyphs[i].yMin,fontRaw,gStart+4);
+		copyBigEndian(&glyphs[i].xMax,fontRaw,gStart+6);
+		copyBigEndian(&glyphs[i].yMax,fontRaw,gStart+8);
+		//printf("%d,%d,%d,%d\n",glyphs[i].xMin,glyphs[i].yMin,glyphs[i].xMax,glyphs[i].yMax);
+		if(glyphs[i].numberOfContours<=0)
 			continue;
-		sg.endPointsOfContours = new unsigned short[sg.numberOfContours];
-		for(int j=0; j<sg.numberOfContours; j++){
-			copyBigEndian(&sg.endPointsOfContours[j],fontRaw,gStart+10+j*2);
-			printf("ct end:%d\n",sg.endPointsOfContours[j]);
+		glyphs[i].endPointsOfContours = new unsigned short[glyphs[i].numberOfContours];
+		for(int j=0; j<glyphs[i].numberOfContours; j++){
+			copyBigEndian(&glyphs[i].endPointsOfContours[j],fontRaw,gStart+10+j*2);
+			//printf("ct end:%d\n",glyphs[i].endPointsOfContours[j]);
 		}
-		int numPoints = sg.endPointsOfContours[sg.numberOfContours-1]+1;
-		sg.numPoints=numPoints;
-		printf("num points %d\n",numPoints);
+		int numPoints = glyphs[i].endPointsOfContours[glyphs[i].numberOfContours-1]+1;
+		glyphs[i].numPoints=numPoints;
+		//printf("num points %d\n",numPoints);
 		//instructions
-		unsigned int instStart = gStart+10+sg.numberOfContours*2;
-		copyBigEndian(&sg.instructionLength,fontRaw,instStart);
-		printf("num instructions %d\n",sg.instructionLength);
+		unsigned int instStart = gStart+10+glyphs[i].numberOfContours*2;
+		copyBigEndian(&glyphs[i].instructionLength,fontRaw,instStart);
+		//printf("num instructions %d\n",glyphs[i].instructionLength);
 		//flags
-		sg.flags = new unsigned char[numPoints];
-		sg.onCurve = new bool [numPoints];
-		unsigned int flagsStart = instStart+2+sg.instructionLength;
+		glyphs[i].flags = new unsigned char[numPoints];
+		glyphs[i].onCurve = new bool [numPoints];
+		unsigned int flagsStart = instStart+2+glyphs[i].instructionLength;
 		for(int j=0; j<numPoints; j++){
-			sg.flags[j]=fontRaw[flagsStart];
-			sg.onCurve[j]=sg.flags[j]&0x01;
+			glyphs[i].flags[j]=fontRaw[flagsStart];
+			glyphs[i].onCurve[j]=glyphs[i].flags[j]&0x01;
 			//check repeat bit
-			if(((sg.flags[j]>>3)&0x01)==1)
+			if(((glyphs[i].flags[j]>>3)&0x01)==1)
 			{
 				flagsStart++;
 				int repeatCount = fontRaw[flagsStart];
 				while(repeatCount>0)
 				{
 					j++;
-					sg.flags[j]=sg.flags[j-1];
-					sg.onCurve[j]=sg.flags[j]&0x01;
+					glyphs[i].flags[j]=glyphs[i].flags[j-1];
+					glyphs[i].onCurve[j]=glyphs[i].flags[j]&0x01;
 					repeatCount--;
 				}
 			}
 			flagsStart++;
 		}
 		//coords
-		sg.xCoords= new short[numPoints];
-		sg.yCoords= new short[numPoints];
+		glyphs[i].xCoords= new short[numPoints];
+		glyphs[i].yCoords= new short[numPoints];
 		unsigned int coordCounter = flagsStart;
 		short prevCoord=0;
 		short curCoord=0;
 		//x coord
 		for(int j=0; j<numPoints; j++){
-			int flagCombined = ((sg.flags[j]>>1)&0x01) << 1 | ((sg.flags[j]>>4)&0x01);
+			int flagCombined = ((glyphs[i].flags[j]>>1)&0x01) << 1 | ((glyphs[i].flags[j]>>4)&0x01);
 			switch(flagCombined){
 				case 0://signed 16 bit delta
 					copyBigEndian(&curCoord,fontRaw,coordCounter);
@@ -523,13 +705,13 @@ void loadFont(char* fontName){
 					coordCounter++;
 					break;
 			}
-			sg.xCoords[j]=curCoord+prevCoord;
-			prevCoord=sg.xCoords[j];
+			glyphs[i].xCoords[j]=curCoord+prevCoord;
+			prevCoord=glyphs[i].xCoords[j];
 		}
 		//y coord
 		prevCoord=0;
 		for(int j=0; j<numPoints; j++){
-			int flagCombined = ((sg.flags[j]>>2)&0x01) << 1 | ((sg.flags[j]>>5)&0x01);
+			int flagCombined = ((glyphs[i].flags[j]>>2)&0x01) << 1 | ((glyphs[i].flags[j]>>5)&0x01);
 			switch(flagCombined){
 				case 0://signed 16 bit delta
 					copyBigEndian(&curCoord,fontRaw,coordCounter);
@@ -548,12 +730,14 @@ void loadFont(char* fontName){
 					coordCounter++;
 					break;
 			}
-			sg.yCoords[j]=curCoord+prevCoord;
-			prevCoord=sg.yCoords[j];
-			//printf("%d,%d,%d\n",sg.xCoords[j],sg.yCoords[j],sg.onCurve[j]);
+			glyphs[i].yCoords[j]=curCoord+prevCoord;
+			prevCoord=glyphs[i].yCoords[j];
+			//printf("%d,%d,%d\n",glyphs[i].xCoords[j],glyphs[i].yCoords[j],glyphs[i].onCurve[j]);
 		}
-		sdfTest(&sg);
+		//sdfTest(&sg);
 	}
+	fontAtlasTest(glyphs);
+	//sdfTest(&glyphs[12]);
 }
 
 //splt
