@@ -1,7 +1,6 @@
 #ifndef INPUT_H
 #define INPUT_H
 
-#include "vector.h"
 #include "screen.h"
 
 //input variables

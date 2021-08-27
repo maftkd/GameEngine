@@ -89,14 +89,85 @@ void drawBezier(vec2* contour, int index, int steps, vec2 a, vec2 control, vec2 
 	}
 }
 
+//temp - node class for texture packing data structure
+//should probably go in image.h and should be decoupled from simpleGlyphs
+struct node{
+	node* children;
+	//x,y = offset z,w = extents
+	vec4 box;
+	int boxIndex=0;
+
+	node(){
+		boxIndex=-2;
+	}
+
+	node(vec4 b){
+		box=b;
+		boxIndex=-1;
+	}
+
+	void init(vec4 b){
+		box=b;
+		boxIndex=-1;
+		children = new node[2];
+	}
+
+	bool isOccupied(){
+		return boxIndex!=-1;
+	}
+
+	bool hasRoom(vec2 extents){
+		return extents.x<=box.z&&extents.y<=box.w;
+	}
+
+	bool justRight(vec2 extents){
+		return (box.z-extents.x<1)&&(box.w-extents.y<1);
+	}
+
+	bool isLeaf(){
+		return children[0].boxIndex==-2 && children[1].boxIndex==-2;
+	}
+
+	bool insert(simpleGlyph * glyphs, int i){
+		vec2 b = glyphs[i].size;
+		if(!isLeaf()){
+			if(children[0].insert(glyphs,i))
+				return true;
+			return children[1].insert(glyphs,i);
+		}
+		if(isOccupied())
+			return false;
+		if(!hasRoom(b))
+			return false;
+		if(justRight(b))
+		{
+			boxIndex=i;
+			glyphs[i].offset=vec2(box.x,box.y);
+			return true;
+		}
+		//gotta split
+		//decide which way to split
+		float dw = box.z - b.x;
+		float dh = box.w - b.y;
+		if(dw>dh){//horizontal split
+			children[0].init(vec4(box.x,box.y,b.x,box.w));
+			children[1].init(vec4(box.x+b.x,box.y,box.z-b.x,box.w));
+		}
+		else{
+			children[0].init(vec4(box.x,box.y,box.z,b.y));
+			children[1].init(vec4(box.x,box.y+b.y,box.z,box.w-b.y));
+		}
+		return children[0].insert(glyphs,i);
+	}
+};
+
 //simple func to pack the glyphs in a grid layout
 void fontAtlasTest(simpleGlyph *glyphs){
-	int texSize=1024;
-	float imageScale=0.065;//overall scale from ttf data
+	int texSize=512;
+	float imageScale=0.1;//overall scale from ttf data
 	float secondaryScale=0.75;//scale down glyph for padding
 
-	//get max sizes
-	vec2 max;
+	//get bounds
 	for(int i=0; i<94;i++){
 		vec2 size = vec2(glyphs[i].xMax-glyphs[i].xMin,glyphs[i].yMax-glyphs[i].yMin);
 		//scale image down for faster testing
@@ -104,24 +175,36 @@ void fontAtlasTest(simpleGlyph *glyphs){
 		size.round();
 		printf("%d,%f,%f\n",(i+33),size.x,size.y);
 		glyphs[i].size=size;
-		if(glyphs[i].size.x>max.x)
-			max.setx(glyphs[i].size.x);
-		if(glyphs[i].size.y>max.y)
-			max.sety(glyphs[i].size.y);
 	}
 
-	//arrange offsets in a rectilinear fashion
-	float y=0;
-	int iOffset=0;
-	for(int i=0; i<94; i++)
-	{
-		vec2 offset = vec2((i-iOffset)*max.x,y);
-		if(offset.x+glyphs[i].size.x>=texSize){
-			y+=max.y;
-			iOffset=i;
-			offset = vec2((i-iOffset)*max.x,y);
+	//bubble sort these guys biggest to smallest
+	for(int i=0; i<94-1; i++){
+		for(int j=0; j<94-1-i;j++){
+			//compare area
+			float aCur=glyphs[j].size.x*glyphs[j].size.y;
+			float aNext=glyphs[j+1].size.x*glyphs[j+1].size.y;
+			if(aCur<aNext){
+				simpleGlyph tmp = glyphs[j];
+				glyphs[j]=glyphs[j+1];
+				glyphs[j+1]=tmp;
+			}
 		}
-		glyphs[i].offset=offset;
+	}
+
+	bool fit=false;
+	bool first=true;
+	while(!fit){
+		if(!first)
+			texSize+=100;
+		first=false;
+		fit=true;
+		//insert the glyphs
+		node root;
+		root.init(vec4(0,0,texSize,texSize));
+		for(int i=0; i<94; i++){
+			if(!root.insert(glyphs,i))
+				fit=false;
+		}
 	}
 
 	//generate sdf data and copy to texture data
@@ -748,6 +831,8 @@ void initFontEditor(){
 	//loadFont("fonts/Gorehand.otf");
 	loadFont("fonts/Envy Code R.ttf");
 	//loadFont("fonts/Grethania Script Reguler.ttf");
+	//loadFont("fonts/arial.ttf");
+	//loadFont("fonts/times.ttf");
 }
 
 void updateFontEditor(){
