@@ -209,7 +209,7 @@ void fontAtlasTest(simpleGlyph *glyphs){
 
 	//generate sdf data and copy to texture data
 	int numPixels=texSize*texSize;
-	int numBytes=numPixels*4;
+	int numBytes=numPixels*3;
 	unsigned char* pixels= new unsigned char[numBytes];
 	for(int i=0; i<94; i++){
 		printf("rasterizing %c\n",(i+33));
@@ -299,14 +299,13 @@ void fontAtlasTest(simpleGlyph *glyphs){
 
 		float maxDist=min(paddingOffset.x,paddingOffset.y);
 		//fill pixel array
-		int pixelStart=(int)glyphs[i].offset.y*texSize*4+(int)glyphs[i].offset.x*4;
+		int pixelStart=(int)glyphs[i].offset.y*texSize*3+(int)glyphs[i].offset.x*3;
 		printf("size (%f,%f)\n",glyphs[i].size.x,glyphs[i].size.y);
 		printf("offset (%f,%f)\n",glyphs[i].offset.x,glyphs[i].offset.y);
 		printf("filling pixels starting at: %d\n",pixelStart);
 		for(int y=0;y<(int)glyphs[i].size.y;y++){
 			for(int x=0;x<(int)glyphs[i].size.x;x++){
-				//int pixelIndex=y*size.x*4+x*4;
-				int pixelIndex=pixelStart+y*texSize*4+x*4;
+				int pixelIndex=pixelStart+y*texSize*3+x*3;
 				if(pixelIndex>=numBytes){
 					printf("font data overflowing atlas size. Try a larger atlas\n");
 					return;
@@ -345,11 +344,11 @@ void fontAtlasTest(simpleGlyph *glyphs){
 				pixels[pixelIndex]=(int)(255*normDist);
 				pixels[pixelIndex+1]=(int)(255*normDist);
 				pixels[pixelIndex+2]=(int)(255*normDist);
-				pixels[pixelIndex+3]=255;
 			}
 		}
 	}
-	exportBitmapBgra("images/fontAtlas.bmp",texSize,texSize,pixels,numBytes);
+	//exportBitmapBgra("images/fontAtlas.bmp",texSize,texSize,pixels,numBytes);
+	exportBitmapBgr("images/fontAtlas.bmp",texSize,texSize,pixels,numBytes);
 }
 
 void sdfTest(simpleGlyph *glyph){
@@ -829,7 +828,7 @@ void initFontEditor(){
 	printf("initializing font editor yo\n");
 	//loadFont("fonts/Moonrising.ttf");
 	//loadFont("fonts/Gorehand.otf");
-	loadFont("fonts/Envy Code R.ttf");
+	//loadFont("fonts/Envy Code R.ttf");
 	//loadFont("fonts/Grethania Script Reguler.ttf");
 	//loadFont("fonts/arial.ttf");
 	//loadFont("fonts/times.ttf");
@@ -838,9 +837,10 @@ void initFontEditor(){
 void updateFontEditor(){
 	setClearColor(vec4(0.1,0.1,0.1,1));
 
-	if(keyInput[32]==1)
+	if(keyInput[32]==2)
 	{
 		//do something on space
+		setClearColor(vec4(1.0,0.1,0.1,1));
 	}
 	if(keyInput[82]==1){
 		//readTestImage();

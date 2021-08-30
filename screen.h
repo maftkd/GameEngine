@@ -3,6 +3,7 @@
 
 #include <d3d11.h>
 #include <dxgi.h>
+#include <d3dcompiler.h>
 #include <assert.h>
 
 HRESULT hr;//for random windows functions
@@ -19,6 +20,9 @@ IDXGISwapChain* swapChain= NULL;
 ID3D11Texture2D* frameBuffer;
 ID3D11RenderTargetView* renderTarget = NULL;
 
+//viewport
+D3D11_VIEWPORT viewport = {0};
+
 void initRenderBuffers(int width, int height){
 
 	//create a frame buffer
@@ -34,6 +38,14 @@ void initRenderBuffers(int width, int height){
 	  frameBuffer, 0, &renderTarget );
 	if(FAILED(hr))
 		printf("1-failed creating first pass target view %x\n", hr);
+
+	viewport = {
+	  0.0f,
+	  0.0f,
+	  ( FLOAT )( width ),
+	  ( FLOAT )( height ),
+	  0.0f,
+	  1.0f };
 }
 
 void toggleFullScreen(HWND hwnd){
@@ -92,11 +104,87 @@ void clearRenderTarget(vec4 col){
 	deviceContext->ClearRenderTargetView(renderTarget, col.points );
 }
 
+struct shader{
+	ID3DBlob* vsBlob;
+	ID3D11VertexShader* vert = NULL;
+	ID3D11PixelShader* pix   = NULL;
+	ID3D11InputLayout* layout   = NULL;
+
+	shader(){}
+
+	void compile(LPCWSTR path){
+		UINT flags = D3DCOMPILE_ENABLE_STRICTNESS;
+		ID3DBlob *ps_blob_ptr = NULL, *error_blob = NULL;
+		//vert
+		hr = D3DCompileFromFile(path,nullptr,D3D_COMPILE_STANDARD_FILE_INCLUDE,
+		  "vs_main","vs_5_0",flags,0,&vsBlob,&error_blob );
+		if ( FAILED( hr ) ) {
+			if ( error_blob ) {
+				printf("error in vert shader %s\n", (char*)error_blob->GetBufferPointer());
+				error_blob->Release();
+			}
+			if ( vsBlob ) { vsBlob->Release(); }
+			assert( false );
+		}
+		else
+			printf("compiled shader %s [vert]\n",(char*)path);
+
+		//pixel
+		hr = D3DCompileFromFile(path,nullptr,D3D_COMPILE_STANDARD_FILE_INCLUDE,
+		  "ps_main","ps_5_0",flags,0,&ps_blob_ptr,&error_blob );
+		if ( FAILED( hr ) ) {
+			if ( error_blob ) {
+				printf("error in frag shader %s\n", (char*)error_blob->GetBufferPointer());
+				error_blob->Release();
+			}
+			if ( ps_blob_ptr ) { ps_blob_ptr->Release(); }
+			assert( false );
+		}	
+		else
+			printf("compiled shader %s [pixel]\n",(char*)path);
+
+		//create shaders
+		hr = device->CreateVertexShader(vsBlob->GetBufferPointer(),
+				vsBlob->GetBufferSize(),NULL,&vert );
+		assert( SUCCEEDED( hr ) );
+		hr = device->CreatePixelShader(ps_blob_ptr->GetBufferPointer(),
+				ps_blob_ptr->GetBufferSize(),NULL,&pix );
+		assert( SUCCEEDED( hr ) );
+	}
+
+	void setLayout(D3D11_INPUT_ELEMENT_DESC inputElemDes[], int elems){
+		hr = device->CreateInputLayout(
+			inputElemDes,
+			elems,
+			vsBlob->GetBufferPointer(),
+			vsBlob->GetBufferSize(),
+			&layout );
+		assert( SUCCEEDED( hr ) );
+	}
+
+	void use(){
+		deviceContext->VSSetShader( vert, NULL, 0 );
+		deviceContext->PSSetShader( pix, NULL, 0 );
+		deviceContext->IASetInputLayout( layout );
+	}
+	void Release(){
+		vsBlob->Release();
+		vert->Release();
+		pix->Release();
+		layout->Release();
+	}
+};
+
 struct renderCommands{
 	vec4 clearColor;
 	ID3D11Query* disjoint;
 	ID3D11Query* start;
 	ID3D11Query* end;
+	//store triangle data
+	ID3D11Buffer* vertices;
+	//temp - drawing a single triangle
+	int maxVerts=3;
+	int bytesPerVert = 8;
 
 	renderCommands(){}
 
@@ -108,10 +196,28 @@ struct renderCommands{
 		qdes.Query = D3D11_QUERY_TIMESTAMP;
 		device->CreateQuery(&qdes,&start);
 		device->CreateQuery(&qdes,&end);
+
+		//temp - later we should encapsulate this into a helper method
+		//create vertex buffer
+		D3D11_BUFFER_DESC vertex_buff_descr     = {};
+		vertex_buff_descr.ByteWidth             = maxVerts*bytesPerVert;
+		vertex_buff_descr.Usage                 = D3D11_USAGE_DEFAULT;
+		vertex_buff_descr.BindFlags             = D3D11_BIND_VERTEX_BUFFER;
+		D3D11_SUBRESOURCE_DATA sr_data          = { 0 };
+		//temp
+		float zeros[6]={-0.5,-0.5,0.0,0.5,0.5,-0.5}; 
+		sr_data.pSysMem                         = zeros;
+		hr = device->CreateBuffer(
+			&vertex_buff_descr,
+			&sr_data,
+			&vertices );
+		if(FAILED(hr))
+			printf("failed making vertex buffer %x\n",hr);
 	}
 
 	void copy(renderCommands rcq){
 		clearColor=rcq.clearColor;
+		//dont care about temp triangle data getting coppied during testing
 	}
 
 	void swapTimeStamps(renderCommands* rcq){
@@ -163,6 +269,20 @@ void setClearColor(vec4 col){
 	curFrameRenderCommands.clearColor=col;
 }
 
+shader testShader;
+void compileTestShader(){
+	//temp - regardless of mode, just compile this test shader
+	testShader.compile(L"shaders/test.hlsl");
+	D3D11_INPUT_ELEMENT_DESC inputElementLayout[] = {
+		{ "POS", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 }
+	};
+	testShader.setLayout(inputElementLayout, 1);
+}
+
+//temp code test stride and vert offset
+UINT stride = 2*sizeof(float);
+UINT vertOffset=0;
+
 DWORD WINAPI renderThread( LPVOID lpParam ) 
 { 
 	while(rendering){
@@ -172,6 +292,15 @@ DWORD WINAPI renderThread( LPVOID lpParam )
 		deviceContext->End(prevFrameRenderCommands.start);
 
 		clearRenderTarget(prevFrameRenderCommands.clearColor);
+
+		//test draw triangle
+		//draw triangle from previous frame render commands
+		testShader.use();
+		deviceContext->IASetVertexBuffers(0,1,&prevFrameRenderCommands.vertices,&stride,&vertOffset );
+		deviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST );
+		deviceContext->RSSetViewports( 1, &viewport );
+		deviceContext->Draw(3,0);
+
 		swapChain->Present(1,0);
 
 		deviceContext->End(prevFrameRenderCommands.end);

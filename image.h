@@ -56,6 +56,49 @@ void exportBitmapBgra(char* path, int w, int h, unsigned char* data, int size){
 		printf("Error writing to file %s\n",path);
 }
 
+void exportBitmapBgr(char* path, int w, int h, unsigned char* data, int size){
+	//header data
+	unsigned char header[14] = {0};
+	unsigned int fileSize = 54+size;
+	unsigned int pixelStart=54;
+	header[0]=0x42;
+	header[1]=0x4D;
+	memcpy(&header[2],&fileSize,4);
+	//ignore bytes 6 thru 9
+	memcpy(&header[10],&pixelStart,4);
+	
+	//dib header - bitmapinfoheader
+	unsigned int dibHeaderSize=40;
+	unsigned char dibHeader[40] = {0};
+	memcpy(&dibHeader[0],&dibHeaderSize,4);
+	memcpy(&dibHeader[4],&w,4);
+	memcpy(&dibHeader[8],&h,4);
+	unsigned short colorPlanes=1;
+	memcpy(&dibHeader[12],&colorPlanes,2);
+	unsigned short bbp=24;
+	memcpy(&dibHeader[14],&bbp,2);
+	unsigned int compressionType=0;
+	memcpy(&dibHeader[16],&compressionType,4);
+	unsigned int bitmapDataSize=size;
+	memcpy(&dibHeader[20],&bitmapDataSize,4);
+	int pixelsPerM = 3780;//random default from paint.net
+	memcpy(&dibHeader[24],&pixelsPerM,4);
+	memcpy(&dibHeader[28],&pixelsPerM,4);
+	//leave next 4 for color palette size
+	//leave next 4 for important colors
+	
+	//write to file
+	FILE * f = fopen (path, "wb");
+	if (f){
+		fwrite(header,1,14,f);
+		fwrite(dibHeader,1,40,f);
+		fwrite(data,1,size,f);
+		fclose(f);
+	}
+	else
+		printf("Error writing to file %s\n",path);
+}
+
 void genTestImage(){
 
 	//pixel data - BGRA

@@ -37,6 +37,7 @@ void init(){
 			initGame();
 			break;
 		case 1:
+			compileTestShader();
 			initFontEditor();
 			break;
 	}
