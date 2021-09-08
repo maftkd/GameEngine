@@ -832,10 +832,15 @@ void initFontEditor(){
 	//loadFont("fonts/Grethania Script Reguler.ttf");
 	//loadFont("fonts/arial.ttf");
 	//loadFont("fonts/times.ttf");
+	addTriangle(-0.5,-0.5,0.0,0.5,0.5,-0.5);
 }
 
 void updateFontEditor(){
-	setClearColor(vec4(0.1,0.1,0.1,1));
+	setClearColor(vec4(0.3,0.3,0.3,1));
+
+	//maybe we should be able to draw a blank gui panel
+	//or even a sprite
+	//before we draw the text
 
 	if(keyInput[32]==2)
 	{
@@ -844,6 +849,12 @@ void updateFontEditor(){
 	}
 	if(keyInput[82]==1){
 		//readTestImage();
+	}
+	if(keyInput[77]==1){//M
+		addTriangle(-1.0,0.5,-0.5,1.0,0.0,0.5);
+	}
+	if(keyInput[78]==1){//N
+		addTriangle(0.0,0.5,0.5,1.0,1.0,0.5);
 	}
 }
 

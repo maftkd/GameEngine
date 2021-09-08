@@ -151,6 +151,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 		curFrameRenderCommands.swapTimeStamps(&prevFrameRenderCommands);
 		//copy current frame render commands to previous
 		prevFrameRenderCommands.copy(curFrameRenderCommands);
+		//reset current frame
+		curFrameRenderCommands.reset();
 	}
 
 	//close render thread
