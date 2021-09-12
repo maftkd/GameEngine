@@ -8,6 +8,7 @@
 
 HRESULT hr;//for random windows functions
 vec2 screenSize;
+const float aspect = 16.0f/9.0f;
 bool fullScreen=false;
 bool initD3Buffers=false;
 
@@ -329,28 +330,27 @@ void addTriangle(float x1, float y1, float x2, float y2, float x3, float y3){
 	printf("verts changed= true!\n");
 }
 */
-void addChar(float left, float bottom, float right, float top){
+void addChar(float left, float bottom, float width, float height){
 	int startIndex=curFrameRenderCommands.numCharVerts*4;
 	curFrameRenderCommands.charVerts[startIndex]=left;
 	curFrameRenderCommands.charVerts[startIndex+1]=bottom;
 	curFrameRenderCommands.charVerts[startIndex+2]=0;
 	curFrameRenderCommands.charVerts[startIndex+3]=0;
 	curFrameRenderCommands.charVerts[startIndex+4]=left;
-	curFrameRenderCommands.charVerts[startIndex+5]=top;
+	curFrameRenderCommands.charVerts[startIndex+5]=bottom+height;
 	curFrameRenderCommands.charVerts[startIndex+6]=0;
 	curFrameRenderCommands.charVerts[startIndex+7]=1;
-	curFrameRenderCommands.charVerts[startIndex+8]=right;
+	curFrameRenderCommands.charVerts[startIndex+8]=left+width;
 	curFrameRenderCommands.charVerts[startIndex+9]=bottom;
 	curFrameRenderCommands.charVerts[startIndex+10]=1;
 	curFrameRenderCommands.charVerts[startIndex+11]=0;
-	curFrameRenderCommands.charVerts[startIndex+12]=right;
-	curFrameRenderCommands.charVerts[startIndex+13]=top;
+	curFrameRenderCommands.charVerts[startIndex+12]=left+width;
+	curFrameRenderCommands.charVerts[startIndex+13]=bottom+height;
 	curFrameRenderCommands.charVerts[startIndex+14]=1;
 	curFrameRenderCommands.charVerts[startIndex+15]=1;
 	curFrameRenderCommands.numCharVerts+=4;
 
 	curFrameRenderCommands.charVertsChanged=true;
-	printf("verts changed= true!\n");
 }
 
 //todo think about this

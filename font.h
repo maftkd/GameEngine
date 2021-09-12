@@ -824,6 +824,34 @@ void loadFont(char* fontName){
 
 //splt
 
+void testTypeString(char* text, float startX, float startY, float squareWidth){
+	//move cursor to start
+	float x = startX;
+	float y = startY;
+	//get LSB for first char
+	//x += lsb
+	for(int i=0; i<strlen(text); i++){
+		//get char yOffset from char bounding box
+		//yOff = normalize(bounding box -> yMin)
+		//get char width from bounding box
+		//width = normalize(bounding box -> xMax-xMin)
+		//get char height from bounding box
+		//height = normalize(bounding box -> yMax-yMin)
+		//draw char(x,y+yOff,width,height)
+		//advance cursor by ADV_WIDTH
+		//x+=advance_width
+
+		//temp code until we get font data
+		printf("typing char %c\n",text[i]);
+		float yOffset=0;
+		float width=squareWidth;
+		float height=width*aspect;
+		addChar(x,y+yOffset,width,height);
+		float advanceWidth=width*1.1f;
+		x+=advanceWidth;
+	}
+}
+
 void initFontEditor(){
 	printf("initializing font editor yo\n");
 	//loadFont("fonts/Moonrising.ttf");
@@ -833,7 +861,9 @@ void initFontEditor(){
 	//loadFont("fonts/arial.ttf");
 	//loadFont("fonts/times.ttf");
 	//addTriangle(-0.5,-0.5,0.0,0.5,0.5,-0.5);
-	addChar(-0.5,-0.5,0.5,0.5);
+	//addChar(-0.5,-0.5,0.5,0.5);
+	//on char typed -> type character
+	testTypeString("Hello World",-1.0f,0,0.1f);
 }
 
 void updateFontEditor(){
@@ -853,11 +883,11 @@ void updateFontEditor(){
 	}
 	if(keyInput[77]==1){//M
 		//addTriangle(-1.0,0.5,-0.5,1.0,0.0,0.5);
-		addChar(-0.9,0.7,-0.7,0.9);
+		//addChar(-0.9,0.7,-0.7,0.9);
 	}
 	if(keyInput[78]==1){//N
 		//addTriangle(0.0,0.5,0.5,1.0,1.0,0.5);
-		addChar(0.7,0.7,0.9,0.9);
+		//addChar(0.7,0.7,0.9,0.9);
 	}
 }
 

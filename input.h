@@ -50,6 +50,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
 			break;
 		case WM_CHAR:
 			//printf("char typed %x\n",wParam);
+			//if we are in the font mode, maybe
 			//char pressed
 			break;
 		case WM_SYSKEYDOWN: {
