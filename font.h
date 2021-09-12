@@ -832,7 +832,8 @@ void initFontEditor(){
 	//loadFont("fonts/Grethania Script Reguler.ttf");
 	//loadFont("fonts/arial.ttf");
 	//loadFont("fonts/times.ttf");
-	addTriangle(-0.5,-0.5,0.0,0.5,0.5,-0.5);
+	//addTriangle(-0.5,-0.5,0.0,0.5,0.5,-0.5);
+	addChar(-0.5,-0.5,0.5,0.5);
 }
 
 void updateFontEditor(){
@@ -851,10 +852,12 @@ void updateFontEditor(){
 		//readTestImage();
 	}
 	if(keyInput[77]==1){//M
-		addTriangle(-1.0,0.5,-0.5,1.0,0.0,0.5);
+		//addTriangle(-1.0,0.5,-0.5,1.0,0.0,0.5);
+		addChar(-0.9,0.7,-0.7,0.9);
 	}
 	if(keyInput[78]==1){//N
-		addTriangle(0.0,0.5,0.5,1.0,1.0,0.5);
+		//addTriangle(0.0,0.5,0.5,1.0,1.0,0.5);
+		addChar(0.7,0.7,0.9,0.9);
 	}
 }
 

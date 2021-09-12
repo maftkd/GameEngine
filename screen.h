@@ -25,7 +25,10 @@ D3D11_VIEWPORT viewport = {0};
 
 //buffer
 //temp
-ID3D11Buffer* testVertices;
+ID3D11Buffer* charVertices;
+ID3D11Buffer* charIndices;
+const int maxCharVerts=4096;
+const int bytesPerCharVert=16;
 
 void initRenderBuffers(int width, int height){
 
@@ -184,16 +187,11 @@ struct renderCommands{
 	ID3D11Query* disjoint;
 	ID3D11Query* start;
 	ID3D11Query* end;
-	//store triangle data
-	//todo rename this
-	//ID3D11Buffer* testVertices;
-	//temp stuff
-	float* verts;
-	bool vertsChanged;
-	int numVerts=0;
-	//temp - drawing a single triangle
-	int maxVerts=9;
-	int bytesPerVert = 8;
+	//for storing vertex data - copy is stored in cpu memory but only to pass between frames
+	//data is only updated on the gpu on an as needed basis, hence the Changed flag
+	float* charVerts;
+	bool charVertsChanged;
+	int numCharVerts=0;
 
 	renderCommands(){}
 
@@ -206,43 +204,22 @@ struct renderCommands{
 		device->CreateQuery(&qdes,&start);
 		device->CreateQuery(&qdes,&end);
 
-		verts = new float[maxVerts*2];
-
-		//todo can we clean this up at all
-		//temp - later we should encapsulate this into a helper method
-		//create vertex buffer
-		/*
-		D3D11_BUFFER_DESC vertex_buff_descr     = {};
-		vertex_buff_descr.ByteWidth             = maxVerts*bytesPerVert;
-		vertex_buff_descr.Usage                 = D3D11_USAGE_DEFAULT;
-		vertex_buff_descr.BindFlags             = D3D11_BIND_VERTEX_BUFFER;
-		D3D11_SUBRESOURCE_DATA sr_data          = { 0 };
-		//temp
-		float zeros[6]={-0.5,-0.5,0.0,0.5,0.5,-0.5}; 
-		sr_data.pSysMem                         = zeros;
-		hr = device->CreateBuffer(
-			&vertex_buff_descr,
-			&sr_data,
-			&testVertices );
-		if(FAILED(hr))
-			printf("failed making vertex buffer %x\n",hr);
-			*/
+		charVerts = new float[(bytesPerCharVert/4)*maxCharVerts];
 	}
 
 	void reset(){
-		vertsChanged=false;
+		charVertsChanged=false;
 	}
 
 	void copy(renderCommands rcq){
 		clearColor=rcq.clearColor;
 		//copy verts
-		for(int i=0;i<maxVerts*2; i++)
-			verts[i]=rcq.verts[i];
-		numVerts=rcq.numVerts;
-		vertsChanged=rcq.vertsChanged;
-		//need to think about how to copy buffers in an efficient way
-		//i.e. only when changes occur
-		//just make sure we really need two vertex buffers for our pipelined renderer
+		if(rcq.charVertsChanged){
+			for(int i=0;i<rcq.numCharVerts*(bytesPerCharVert/4); i++)
+				charVerts[i]=rcq.charVerts[i];
+			numCharVerts=rcq.numCharVerts;
+		}
+		charVertsChanged=rcq.charVertsChanged;
 	}
 
 	void swapTimeStamps(renderCommands* rcq){
@@ -291,19 +268,45 @@ void initRenderer(HWND hwnd, int width, int height){
 
 	//init a vertex buffer for some triangles
 	D3D11_BUFFER_DESC vertex_buff_descr     = {};
-	vertex_buff_descr.ByteWidth             = curFrameRenderCommands.maxVerts*curFrameRenderCommands.bytesPerVert;
+	vertex_buff_descr.ByteWidth             = maxCharVerts*bytesPerCharVert;
 	vertex_buff_descr.Usage                 = D3D11_USAGE_DEFAULT;
 	vertex_buff_descr.BindFlags             = D3D11_BIND_VERTEX_BUFFER;
 	D3D11_SUBRESOURCE_DATA sr_data          = { 0 };
-	//temp
-	float zeros[18]={0}; 
+	//prefill with zeros
+	float zeros[maxCharVerts*(bytesPerCharVert/4)]={0}; 
 	sr_data.pSysMem                         = zeros;
 	hr = device->CreateBuffer(
 		&vertex_buff_descr,
 		&sr_data,
-		&testVertices );
+		&charVertices );
 	if(FAILED(hr))
 		printf("failed making vertex buffer %x\n",hr);
+	
+	//init an index buffer for some rects
+	D3D11_BUFFER_DESC index_buff_descr     = {};
+	index_buff_descr.ByteWidth             = (maxCharVerts/4)*6*4;
+	index_buff_descr.Usage                 = D3D11_USAGE_IMMUTABLE;//this won't change at runtime
+	index_buff_descr.BindFlags             = D3D11_BIND_INDEX_BUFFER;
+	D3D11_SUBRESOURCE_DATA sr_data2		   = { 0 };
+	//temp
+	int * triIndices = new int[(maxCharVerts/4)*6]; 
+	int triCount=0;
+	for(int i=0; i<maxCharVerts;i+=4){//every 4th vertex requires 2 tris / 6 indices
+		triIndices[triCount]=0+i;
+		triIndices[triCount+1]=1+i;
+		triIndices[triCount+2]=2+i;
+		triIndices[triCount+3]=2+i;
+		triIndices[triCount+4]=1+i;
+		triIndices[triCount+5]=3+i;
+		triCount+=6;
+	}
+	sr_data2.pSysMem						= triIndices;
+	hr = device->CreateBuffer(
+		&index_buff_descr,
+		&sr_data2,
+		&charIndices );
+	if(FAILED(hr))
+		printf("failed making index buffer %x\n",hr);
 }
 
 void setClearColor(vec4 col){
@@ -311,6 +314,7 @@ void setClearColor(vec4 col){
 }
 
 //temp - this method seems pretty useless for now save some testing
+/*
 void addTriangle(float x1, float y1, float x2, float y2, float x3, float y3){
 	int startIndex=curFrameRenderCommands.numVerts*2;
 	curFrameRenderCommands.verts[startIndex]=x1;
@@ -324,6 +328,30 @@ void addTriangle(float x1, float y1, float x2, float y2, float x3, float y3){
 	curFrameRenderCommands.vertsChanged=true;
 	printf("verts changed= true!\n");
 }
+*/
+void addChar(float left, float bottom, float right, float top){
+	int startIndex=curFrameRenderCommands.numCharVerts*4;
+	curFrameRenderCommands.charVerts[startIndex]=left;
+	curFrameRenderCommands.charVerts[startIndex+1]=bottom;
+	curFrameRenderCommands.charVerts[startIndex+2]=0;
+	curFrameRenderCommands.charVerts[startIndex+3]=0;
+	curFrameRenderCommands.charVerts[startIndex+4]=left;
+	curFrameRenderCommands.charVerts[startIndex+5]=top;
+	curFrameRenderCommands.charVerts[startIndex+6]=0;
+	curFrameRenderCommands.charVerts[startIndex+7]=1;
+	curFrameRenderCommands.charVerts[startIndex+8]=right;
+	curFrameRenderCommands.charVerts[startIndex+9]=bottom;
+	curFrameRenderCommands.charVerts[startIndex+10]=1;
+	curFrameRenderCommands.charVerts[startIndex+11]=0;
+	curFrameRenderCommands.charVerts[startIndex+12]=right;
+	curFrameRenderCommands.charVerts[startIndex+13]=top;
+	curFrameRenderCommands.charVerts[startIndex+14]=1;
+	curFrameRenderCommands.charVerts[startIndex+15]=1;
+	curFrameRenderCommands.numCharVerts+=4;
+
+	curFrameRenderCommands.charVertsChanged=true;
+	printf("verts changed= true!\n");
+}
 
 //todo think about this
 shader testShader;
@@ -331,14 +359,15 @@ void compileTestShader(){
 	//temp - regardless of mode, just compile this test shader
 	testShader.compile(L"shaders/test.hlsl");
 	D3D11_INPUT_ELEMENT_DESC inputElementLayout[] = {
-		{ "POS", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 }
+		{ "POS", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+		{ "TEX", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 }
 	};
-	testShader.setLayout(inputElementLayout, 1);
+	testShader.setLayout(inputElementLayout, 2);
 }
 
 //todo move this
 //temp code test stride and vert offset
-UINT stride = 2*sizeof(float);
+UINT stride = 4*sizeof(float);
 UINT vertOffset=0;
 
 DWORD WINAPI renderThread( LPVOID lpParam ) 
@@ -349,33 +378,31 @@ DWORD WINAPI renderThread( LPVOID lpParam )
 		deviceContext->Begin(prevFrameRenderCommands.disjoint);
 		deviceContext->End(prevFrameRenderCommands.start);
 
-		//check triangle test buffer
-		//temp
-		if(prevFrameRenderCommands.vertsChanged){
-			//update subresource
+		//check for a change in char vert buffer
+		if(prevFrameRenderCommands.charVertsChanged){
 			D3D11_BOX dstBox;
 			dstBox.left=0;
-			dstBox.right=prevFrameRenderCommands.numVerts*2*4;
+			dstBox.right=prevFrameRenderCommands.numCharVerts*4*4;
 			dstBox.top=0;
 			dstBox.bottom=1;
 			dstBox.front=0;
 			dstBox.back=1;
-			deviceContext->UpdateSubresource(testVertices,0,&dstBox,prevFrameRenderCommands.verts,0,0);
-			prevFrameRenderCommands.vertsChanged=false;
-			printf("Updating subresource\n");
+			deviceContext->UpdateSubresource(charVertices,0,&dstBox,prevFrameRenderCommands.charVerts,0,0);
+			prevFrameRenderCommands.charVertsChanged=false;
+			printf("Updating subresource %d\n",dstBox.right);
 		}
 
 		clearRenderTarget(prevFrameRenderCommands.clearColor);
 
-		//test draw triangle
-		//draw triangle from previous frame render commands
+		//draw chars
 		testShader.use();
-		deviceContext->IASetVertexBuffers(0,1,&testVertices,&stride,&vertOffset );
+		deviceContext->IASetIndexBuffer(charIndices,DXGI_FORMAT_R32_UINT,0);
+		deviceContext->IASetVertexBuffers(0,1,&charVertices,&stride,&vertOffset );
 		deviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST );
 		deviceContext->RSSetViewports( 1, &viewport );
-		//todo pass in the number of vertices
-		deviceContext->Draw(prevFrameRenderCommands.numVerts,0);
-		//printf("num verts %d\n",prevFrameRenderCommands.numVerts);
+		//printf("Drawing %d verts\n",(prevFrameRenderCommands.numCharVerts/4)*6);
+		deviceContext->DrawIndexed((prevFrameRenderCommands.numCharVerts/4)*6,0,0);
+		//deviceContext->Draw(prevFrameRenderCommands.numCharVerts,0);
 
 		swapChain->Present(1,0);
 
