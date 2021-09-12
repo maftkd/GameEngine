@@ -314,23 +314,7 @@ void setClearColor(vec4 col){
 	curFrameRenderCommands.clearColor=col;
 }
 
-//temp - this method seems pretty useless for now save some testing
-/*
-void addTriangle(float x1, float y1, float x2, float y2, float x3, float y3){
-	int startIndex=curFrameRenderCommands.numVerts*2;
-	curFrameRenderCommands.verts[startIndex]=x1;
-	curFrameRenderCommands.verts[startIndex+1]=y1;
-	curFrameRenderCommands.verts[startIndex+2]=x2;
-	curFrameRenderCommands.verts[startIndex+3]=y2;
-	curFrameRenderCommands.verts[startIndex+4]=x3;
-	curFrameRenderCommands.verts[startIndex+5]=y3;
-	curFrameRenderCommands.numVerts+=3;
-
-	curFrameRenderCommands.vertsChanged=true;
-	printf("verts changed= true!\n");
-}
-*/
-void addChar(float left, float bottom, float width, float height){
+void testAddChar(float left, float bottom, float width, float height){
 	int startIndex=curFrameRenderCommands.numCharVerts*4;
 	curFrameRenderCommands.charVerts[startIndex]=left;
 	curFrameRenderCommands.charVerts[startIndex+1]=bottom;
@@ -349,8 +333,14 @@ void addChar(float left, float bottom, float width, float height){
 	curFrameRenderCommands.charVerts[startIndex+14]=1;
 	curFrameRenderCommands.charVerts[startIndex+15]=1;
 	curFrameRenderCommands.numCharVerts+=4;
-
 	curFrameRenderCommands.charVertsChanged=true;
+}
+
+void testRemoveLastChar(){
+	if(curFrameRenderCommands.numCharVerts>=4){
+		curFrameRenderCommands.numCharVerts-=4;
+		curFrameRenderCommands.charVertsChanged=true;
+	}
 }
 
 //todo think about this

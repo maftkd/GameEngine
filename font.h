@@ -846,7 +846,7 @@ void testTypeString(char* text, float startX, float startY, float squareWidth){
 		float yOffset=0;
 		float width=squareWidth;
 		float height=width*aspect;
-		addChar(x,y+yOffset,width,height);
+		testAddChar(x,y+yOffset,width,height);
 		float advanceWidth=width*1.1f;
 		x+=advanceWidth;
 	}
@@ -888,6 +888,10 @@ void updateFontEditor(){
 	if(keyInput[78]==1){//N
 		//addTriangle(0.0,0.5,0.5,1.0,1.0,0.5);
 		//addChar(0.7,0.7,0.9,0.9);
+	}
+	if(keyInput[8]==1){
+		printf("backspace\n");
+		testRemoveLastChar();
 	}
 }
 
