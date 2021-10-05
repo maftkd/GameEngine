@@ -21,6 +21,16 @@ unsigned char * readAllBytes(char* fn){
 	return bytes;
 }
 
+void writeAllBytes(char* path, unsigned char* data,int size){
+	FILE * f = fopen (path, "wb");
+	if (f){
+		fwrite(data,1,size,f);
+		fclose(f);
+	}
+	else
+		printf("Error writing to file %s\n",path);
+}
+
 void copyBigEndian(unsigned short* val, unsigned char* data, int offset){
 	memcpy(val,&data[offset],2);
 	*val = (*val)<<8 | (*val)>>8;

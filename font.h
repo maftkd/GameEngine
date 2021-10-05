@@ -78,6 +78,8 @@ typedef struct {
 	bool* onCurve;
 	vec2 size;
 	vec2 offset;
+	unsigned short leftSideBearing;
+	unsigned short advanceWidth;
 } simpleGlyph;
 
 
@@ -162,10 +164,7 @@ struct node{
 };
 
 //simple func to pack the glyphs in a grid layout
-void fontAtlasTest(simpleGlyph *glyphs){
-	int texSize=512;
-	float imageScale=0.1;//overall scale from ttf data
-	float secondaryScale=0.75;//scale down glyph for padding
+void fontAtlasTest(simpleGlyph *glyphs,int texSize=512,float imageScale=0.1,float secondaryScale=0.75){
 
 	//get bounds
 	for(int i=0; i<94;i++){
@@ -173,10 +172,14 @@ void fontAtlasTest(simpleGlyph *glyphs){
 		//scale image down for faster testing
 		size*=imageScale;
 		size.round();
-		printf("%d,%f,%f\n",(i+33),size.x,size.y);
+		//printf("%d,%f,%f\n",(i+33),size.x,size.y);
 		glyphs[i].size=size;
 	}
 
+	int * mapping = new int[94];
+	for(int i=0;i<94;i++){
+		mapping[i]=i;
+	}
 	//bubble sort these guys biggest to smallest
 	for(int i=0; i<94-1; i++){
 		for(int j=0; j<94-1-i;j++){
@@ -187,6 +190,9 @@ void fontAtlasTest(simpleGlyph *glyphs){
 				simpleGlyph tmp = glyphs[j];
 				glyphs[j]=glyphs[j+1];
 				glyphs[j+1]=tmp;
+				int tmpI = mapping[j];
+				mapping[j]=mapping[j+1];
+				mapping[j+1]=tmpI;
 			}
 		}
 	}
@@ -212,7 +218,7 @@ void fontAtlasTest(simpleGlyph *glyphs){
 	int numBytes=numPixels*3;
 	unsigned char* pixels= new unsigned char[numBytes];
 	for(int i=0; i<94; i++){
-		printf("rasterizing %c\n",(i+33));
+		printf("rasterizing %c\n",(mapping[i]+33));
 		vec2 mainOffset = vec2(-glyphs[i].xMin,-glyphs[i].yMin);//offset based on ttf data
 
 		//pad the data so it's centered with some space around the edges
@@ -300,9 +306,9 @@ void fontAtlasTest(simpleGlyph *glyphs){
 		float maxDist=min(paddingOffset.x,paddingOffset.y);
 		//fill pixel array
 		int pixelStart=(int)glyphs[i].offset.y*texSize*3+(int)glyphs[i].offset.x*3;
-		printf("size (%f,%f)\n",glyphs[i].size.x,glyphs[i].size.y);
-		printf("offset (%f,%f)\n",glyphs[i].offset.x,glyphs[i].offset.y);
-		printf("filling pixels starting at: %d\n",pixelStart);
+		//printf("size (%f,%f)\n",glyphs[i].size.x,glyphs[i].size.y);
+		//printf("offset (%f,%f)\n",glyphs[i].offset.x,glyphs[i].offset.y);
+		//printf("filling pixels starting at: %d\n",pixelStart);
 		for(int y=0;y<(int)glyphs[i].size.y;y++){
 			for(int x=0;x<(int)glyphs[i].size.x;x++){
 				int pixelIndex=pixelStart+y*texSize*3+x*3;
@@ -348,182 +354,27 @@ void fontAtlasTest(simpleGlyph *glyphs){
 		}
 	}
 	//exportBitmapBgra("images/fontAtlas.bmp",texSize,texSize,pixels,numBytes);
-	exportBitmapBgr("images/fontAtlas.bmp",texSize,texSize,pixels,numBytes);
+	exportBitmapBgr("fonts/fontAtlas.bmp",texSize,texSize,pixels,numBytes);
+
+	printf("done exporting bitmap, time to write glyph data\n");
+	const int fontDataSize=94*2*4;
+	unsigned char fontDataTest[fontDataSize] = {0};
+	for(int i=0; i<94; i++){
+		int gIndex = mapping[i];
+		printf("writing glyph data for %c\n",(gIndex+33));
+		//need:
+		//size
+		memcpy(&fontDataTest[gIndex*8],&glyphs[i].size.x,4);
+		memcpy(&fontDataTest[gIndex*8+4],&glyphs[i].size.y,4);
+		//offset
+		//advance width
+		//left side bearing
+	}
+	writeAllBytes("fonts/fontAtlas.fdat",fontDataTest,fontDataSize);
 }
 
-void sdfTest(simpleGlyph *glyph){
-	//get size and bounds
-	vec2 mainOffset = vec2(-glyph->xMin,-glyph->yMin);//offset based on ttf data
-	vec2 size = vec2(glyph->xMax-glyph->xMin,glyph->yMax-glyph->yMin);
-	float imageScale=0.1f;//overall scale from ttf data
-	float secondaryScale=0.75f;//scale down glyph for padding
-	//scale image down for faster testing
-	size*=imageScale;
-	size.round();
-	//printf("mainOffset (%f,%f), size (%f,%f)\n",mainOffset.x,mainOffset.y,size.x,size.y);
-	printf("%f,%f\n",size.x,size.y);
-
-	//pad the data so it's centered with some space around the edges
-	vec2 paddingOffset = size*(1-secondaryScale)*0.5f;
-	paddingOffset.round();
-	printf("paddingOffset (%f,%f)\n",paddingOffset.x,paddingOffset.y);
-
-	//allocate byte array for pixel data
-	int numPixels=(int)size.x*(int)size.y;
-	int numBytes=numPixels*4;
-	unsigned char* pixels = new unsigned char[numBytes];
-
-	//break contours into edge segments
-	int bezierCurvePoints=3;
-	int numContours = glyph->numberOfContours;
-	vec2** contours = new vec2*[numContours];
-	int* numContourEdgeSegments = new int[numContours];
-	int curPoint=0;
-
-	//go through each contour and gen points
-	for(int i=0;i<numContours; i++){
-		numContourEdgeSegments[i]=1;
-		int start=curPoint;
-		int end = glyph->endPointsOfContours[i];
-		for(int j=start;j<=end; j++){
-			if(glyph->onCurve[j])
-				numContourEdgeSegments[i]++;
-			else
-				numContourEdgeSegments[i]+=bezierCurvePoints;
-		}
-
-		//allocate enough vec2 for each contour
-		contours[i] = new vec2[numContourEdgeSegments[i]];
-		int counter=0;
-		contours[i][counter]=vec2(glyph->xCoords[start],glyph->yCoords[start]);
-		counter++;
-
-		//determine points on each contour - which will connect into edges
-		for(int j=start+1;j<=end+1;j++){
-			int prev = j-1;
-			int cur = j>end?start : j;
-			int next = cur+1;
-			if(next>end)
-				next-=(end-start)+1;
-		
-			//get glyph coordinates
-			vec2 prevVec=vec2(glyph->xCoords[prev],glyph->yCoords[prev]);
-			vec2 curVec=vec2(glyph->xCoords[cur],glyph->yCoords[cur]);
-			vec2 nextVec=vec2(glyph->xCoords[next],glyph->yCoords[next]);
-
-			//X-1-X
-			if(glyph->onCurve[cur]){
-				contours[i][counter]=curVec;
-				counter++;
-			}
-			//1-0-0
-			else if(glyph->onCurve[prev]&&!glyph->onCurve[cur]&&!glyph->onCurve[next]){
-				drawBezier(contours[i],counter,bezierCurvePoints,prevVec,curVec,lerp(curVec,nextVec,0.5f));
-				counter+=bezierCurvePoints;
-			}
-			//1-0-1
-			else if(glyph->onCurve[prev]&&!glyph->onCurve[cur]&&glyph->onCurve[next]){
-				drawBezier(contours[i],counter,bezierCurvePoints,prevVec,curVec,nextVec);
-				counter+=bezierCurvePoints;
-			}
-			//0-0-1
-			else if(!glyph->onCurve[prev]&&!glyph->onCurve[cur]&&glyph->onCurve[next]){
-				drawBezier(contours[i],counter,bezierCurvePoints,lerp(prevVec,curVec,0.5f),curVec,nextVec);
-				counter+=bezierCurvePoints;
-			}
-			//0-0-0
-			else if(!glyph->onCurve[prev]&&!glyph->onCurve[cur]&&!glyph->onCurve[next]){
-				drawBezier(contours[i],counter,bezierCurvePoints,lerp(prevVec,curVec,0.5f),curVec,lerp(curVec,nextVec,0.5f));
-				counter+=bezierCurvePoints;
-			}
-		}
-		curPoint=end+1;
-	}
-	
-	//scale and translate points to fit image
-	for(int i=0;i<numContours;i++){
-		for(int j=0; j<numContourEdgeSegments[i];j++){
-			vec2 point = contours[i][j]+mainOffset;
-			point*=imageScale*secondaryScale;
-			point+=paddingOffset;
-			contours[i][j]=point;
-		}
-	}
-
-	float maxDist=min(paddingOffset.x,paddingOffset.y);
-	//fill pixel array
-	for(int y=0;y<(int)size.y;y++){
-		for(int x=0;x<(int)size.x;x++){
-			int pixelIndex=y*size.x*4+x*4;
-			
-			//sdf stuff goes here
-			float minDist=1000;
-			float minSign=1;
-			int minI, minJ;
-			float samesies=0;
-			vec2 p = vec2(x,y);
-			for(int i=0;i<numContours;i++){
-				for(int j=1; j<numContourEdgeSegments[i];j++){
-					//get prev point
-					vec2 prevPoint = contours[i][j-1];
-					//get cur point
-					vec2 point = contours[i][j];
-					if(prevPoint==point)
-						continue;
-					float md = signedDistanceToEdge(prevPoint,point,p);
-					if(fabsf(md)<minDist)
-					{
-						minDist=fabsf(md);
-						minSign=sign(md);
-						minI=i;
-						minJ=j;
-					}
-					else if(fabsf(md)==minDist)
-						samesies=minDist;
-				}
-			}
-			if(minDist>maxDist)
-				minDist=maxDist;
-			float normDist=(minSign*minDist)/maxDist;
-			normDist=(normDist+1)*0.5f;
-			pixels[pixelIndex]=(int)(255*normDist);
-			pixels[pixelIndex+1]=(int)(255*normDist);
-			pixels[pixelIndex+2]=(int)(255*normDist);
-			pixels[pixelIndex+3]=255;
-		}
-	}
-
-	/*
-	//drawing some lines
-	for(int i=0;i<numContours;i++){
-		for(int j=1; j<numContourEdgeSegments[i];j++){
-			//get prev point
-			vec2 prevPoint = contours[i][j-1];
-			
-			//get cur point
-			vec2 point = contours[i][j];
-
-			//draw line
-			float dist=distance(point,prevPoint);
-			int pixelDist=(int)dist;
-			for(int k=0; k<pixelDist; k++){
-				float t01=k/(float)pixelDist;
-				vec2 p = lerp(prevPoint,point,t01);
-				p.round();
-				int pointIndex=p.y*size.x*4+p.x*4;
-				pixels[pointIndex]=0xFF;
-				pixels[pointIndex+1]=0x00;
-				pixels[pointIndex+2]=0x00;
-				pixels[pointIndex+3]=0xFF;
-			}
-		}
-	}
-	*/
-	exportBitmapBgra("images/glyphA.bmp",size.x,size.y,pixels,numBytes);
-}
-
-void loadFont(char* fontName){
-	printf("loading font %s\n", fontName);
+void importFont(char* fontName){
+	printf("importing font %s\n", fontName);
 	unsigned char* fontRaw = readAllBytes(fontName);
 	fontDirectory mFont;
 	//useful things
@@ -554,7 +405,7 @@ void loadFont(char* fontName){
 		copyBigEndian(&mFont.tableDirs[i].length,fontRaw,12+i*16+12);
 	}
 
-	//load table stuff
+	//load table data - except glyph data
 	for(int i=0; i<mFont.offSub.numTables; i++){
 		if(strcmp(mFont.tableDirs[i].tag_c,"cmap")==0){
 			printf("found cmap!\n");
@@ -674,21 +525,6 @@ void loadFont(char* fontName){
 			printf("found hmtx w/ offset %d\n",hmtxStart);
 		}
 	}
-	/*
-	unsigned short advanceWidth;
-	short leftSideBearing;
-	for(int i=0; i<numHMetrics; i++){
-		copyBigEndian(&advanceWidth,fontRaw,hmtxStart+i*4);
-		copyBigEndian(&leftSideBearing,fontRaw,hmtxStart+i*4+2);
-		int charCode=-1;
-		for(int j=0; j<95;j++){
-			if(glyphIndices[j]==i)
-				charCode=j+32;
-		}
-		if(charCode!=-1)
-			printf("Char:%d\t\tAdv: %d\tLSB: %d\n",charCode,advanceWidth,leftSideBearing);
-	}
-	*/
 	
 	//glyph time
 	unsigned int glyphOffset;
@@ -696,6 +532,7 @@ void loadFont(char* fontName){
 	int numGlyphs=94;
 	simpleGlyph* glyphs = new simpleGlyph[numGlyphs];
 	for(int i=0; i<numGlyphs; i++){
+		//printf("reading glyph data at index %d. glyph index %d\n",i,glyphIndices[i]);
 		if(glyphIndices[i]*2>locaLength)
 		{
 			printf("glyph index too high...\n");
@@ -717,8 +554,6 @@ void loadFont(char* fontName){
 		unsigned int gStart = glyphStart+glyphOffset;
 		//assume simple glyph
 		copyBigEndian(&glyphs[i].numberOfContours,fontRaw,gStart);
-		//printf("%d,",(32+i));
-		//printf("num contours: %d\n",glyphs[i].numberOfContours);
 		copyBigEndian(&glyphs[i].xMin,fontRaw,gStart+2);
 		copyBigEndian(&glyphs[i].yMin,fontRaw,gStart+4);
 		copyBigEndian(&glyphs[i].xMax,fontRaw,gStart+6);
@@ -818,8 +653,46 @@ void loadFont(char* fontName){
 		}
 		//sdfTest(&sg);
 	}
-	fontAtlasTest(glyphs);
-	//sdfTest(&glyphs[12]);
+
+	//horizontal metrics
+	unsigned short advanceWidth;
+	short leftSideBearing;
+	for(int i=0; i<numHMetrics; i++){
+		copyBigEndian(&advanceWidth,fontRaw,hmtxStart+i*4);
+		copyBigEndian(&leftSideBearing,fontRaw,hmtxStart+i*4+2);
+		int charCode=-1;
+		for(int j=0; j<95;j++){
+			if(glyphIndices[j]==i)
+				charCode=j+32;
+		}
+		if(charCode!=-1)
+		{
+			//printf("Char:%d\t\tAdv: %d\tLSB: %d\n",charCode,advanceWidth,leftSideBearing);
+			//save advance width and lsb to the glyphs array
+			glyphs[charCode-33].leftSideBearing=leftSideBearing;
+			glyphs[charCode-33].advanceWidth=advanceWidth;
+
+		}
+	}
+
+	fontAtlasTest(glyphs,512,0.1,0.75);
+}
+
+void loadFont(char* path){
+	char * dataPath = new char[strlen(path)+5];
+	strcpy(dataPath,path);
+	char * dataExt = ".fdat";
+	strncat(dataPath,dataExt,5);
+	printf("loading font data from %s\n",dataPath);
+	unsigned char * fontData = readAllBytes(dataPath);
+	float sizeX;
+	float sizeY;
+	for(int i=0; i<94; i++){
+		int charCode=i+33;
+		memcpy(&sizeX,&fontData[i*8],4);
+		memcpy(&sizeY,&fontData[i*8+4],4);
+		printf("char: %c, size(%f,%f)\n",charCode,sizeX,sizeY);
+	}
 }
 
 //splt
@@ -854,16 +727,17 @@ void testTypeString(char* text, float startX, float startY, float squareWidth){
 
 void initFontEditor(){
 	printf("initializing font editor yo\n");
-	//loadFont("fonts/Moonrising.ttf");
-	//loadFont("fonts/Gorehand.otf");
-	//loadFont("fonts/Envy Code R.ttf");
-	//loadFont("fonts/Grethania Script Reguler.ttf");
-	//loadFont("fonts/arial.ttf");
-	//loadFont("fonts/times.ttf");
+	//importFont("fonts/Moonrising.ttf");
+	//importFont("fonts/Gorehand.otf");
+	importFont("fonts/source/Envy Code R.ttf");
+	//importFont("fonts/Grethania Script Reguler.ttf");
+	//importFont("fonts/arial.ttf");
+	//importFont("fonts/times.ttf");
 	//addTriangle(-0.5,-0.5,0.0,0.5,0.5,-0.5);
 	//addChar(-0.5,-0.5,0.5,0.5);
 	//on char typed -> type character
-	testTypeString("Hello World",-1.0f,0,0.1f);
+	loadFont("fonts/fontAtlas");
+	//testTypeString("Hello World",-1.0f,0,0.1f);
 }
 
 void updateFontEditor(){
