@@ -357,15 +357,25 @@ void fontAtlasTest(simpleGlyph *glyphs,int texSize=512,float imageScale=0.1,floa
 	exportBitmapBgr("fonts/fontAtlas.bmp",texSize,texSize,pixels,numBytes);
 
 	printf("done exporting bitmap, time to write glyph data\n");
-	const int fontDataSize=94*2*4;
+	const int fontDataSize=94*4*4+4;
 	unsigned char fontDataTest[fontDataSize] = {0};
+	float pad=1-secondaryScale;
+	memcpy(&fontDataTest[0],&pad,4);
 	for(int i=0; i<94; i++){
 		int gIndex = mapping[i];
 		printf("writing glyph data for %c\n",(gIndex+33));
 		//need:
 		//size
-		memcpy(&fontDataTest[gIndex*8],&glyphs[i].size.x,4);
-		memcpy(&fontDataTest[gIndex*8+4],&glyphs[i].size.y,4);
+		float uLeft=glyphs[i].offset.x/texSize;
+		float vBot=glyphs[i].offset.y/texSize;
+		float uRight=uLeft+glyphs[i].size.x/texSize;
+		float vTop=vBot+glyphs[i].size.y/texSize;
+		//printf("bottom left UV = (%f,%f)\n",uLeft,vBot);
+		memcpy(&fontDataTest[4+gIndex*16],&uLeft,4);
+		memcpy(&fontDataTest[4+gIndex*16+4],&vBot,4);
+		memcpy(&fontDataTest[4+gIndex*16+8],&uRight,4);
+		memcpy(&fontDataTest[4+gIndex*16+12],&vTop,4);
+		memcpy(&fontDataTest[4+gIndex*16+12],&vTop,4);
 		//offset
 		//advance width
 		//left side bearing
@@ -685,13 +695,20 @@ void loadFont(char* path){
 	strncat(dataPath,dataExt,5);
 	printf("loading font data from %s\n",dataPath);
 	unsigned char * fontData = readAllBytes(dataPath);
-	float sizeX;
-	float sizeY;
+	float uLeft;
+	float vBot;
+	float uRight;
+	float vTop;
+	float pad;
+	memcpy(&pad,&fontData[0],4);
+	printf("font atlas padding %f\n",pad);
 	for(int i=0; i<94; i++){
 		int charCode=i+33;
-		memcpy(&sizeX,&fontData[i*8],4);
-		memcpy(&sizeY,&fontData[i*8+4],4);
-		printf("char: %c, size(%f,%f)\n",charCode,sizeX,sizeY);
+		memcpy(&uLeft,&fontData[4+i*16],4);
+		memcpy(&vBot,&fontData[4+i*16+4],4);
+		memcpy(&uRight,&fontData[4+i*16+8],4);
+		memcpy(&vTop,&fontData[4+i*16+12],4);
+		printf("char: %c, bl(%f,%f) tr(%f,%f)\n",charCode,uLeft,vBot,uRight,vTop);
 	}
 }
 
