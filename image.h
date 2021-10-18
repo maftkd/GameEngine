@@ -100,7 +100,6 @@ void exportBitmapBgr(char* path, int w, int h, unsigned char* data, int size){
 }
 
 void genTestImage(){
-
 	//pixel data - BGRA
 	int width=256;
 	int height=256;
@@ -116,8 +115,97 @@ void genTestImage(){
 			pixels[pixelIndex+3]=255;
 		}
 	}
-
 	exportBitmapBgra(testPath,width,height,pixels,numBytes);
 }
+
+unsigned int* importBitmap(char* path,int* width, int* height){
+	unsigned char * buff = readAllBytes(path);
+	int fsize;
+	memcpy(&fsize,&buff[2],4);
+	unsigned int dibHeaderSize;
+	memcpy(&dibHeaderSize,&buff[14],4);
+	printf("Dib header size: %d\n",dibHeaderSize);
+	//check if no alpha
+	if(dibHeaderSize==40){
+		memcpy(width,&buff[18],4);
+		memcpy(height,&buff[22],4);
+		unsigned int bitmapDataSize;
+		memcpy(&bitmapDataSize,&buff[34],4);
+		int numPixels = (bitmapDataSize/3);
+		printf("data size %d\n",bitmapDataSize);
+		printf("num pixels %d\n",numPixels);
+		unsigned int * pix = new unsigned int[numPixels];
+		int pixIndex=0;
+		for(int i=54;i<54+bitmapDataSize;i+=3){
+			pix[pixIndex]=(unsigned int)buff[i+2] |
+				(unsigned int)buff[i+1] << 8 |
+				(unsigned int)buff[i] << 16 |
+				0xFF << 24;
+			pixIndex++;
+		}
+		return pix;
+	}
+	else if(dibHeaderSize==124){
+		memcpy(width,&buff[18],4);
+		memcpy(height,&buff[22],4);
+		unsigned int bitmapDataSize=(*width* *height)*4;
+		int numPixels = (bitmapDataSize/4);
+		printf("this is unreliable with a dibheader of 124. Usually these use some compression\n");
+		printf("and we currently have no idea how that works\n");
+		unsigned short bbp;
+		memcpy(&bbp,&buff[28],2);
+		unsigned int * pix = new unsigned int[numPixels];
+		int pixIndex=0;
+		for(int i=142;i<142+bitmapDataSize;i+=4){
+			pix[pixIndex]=(unsigned int)buff[i+2] |
+				(unsigned int)buff[i+1] << 8 |
+				(unsigned int)buff[i] << 16 |
+				0xFF << 24;
+			pixIndex++;
+		}
+		return pix;
+
+	}
+	return NULL;
+}
+
+struct tex2D{
+	ID3D11Texture2D* tex_ptr;
+	ID3D11ShaderResourceView* res_ptr;
+
+	tex2D(){}
+
+	tex2D(char* path){//maybe add DXGI_FORMAT and D3D11_USAGE as params
+		int width;
+		int height;
+		unsigned int* data=importBitmap(path,&width,&height);
+		D3D11_SUBRESOURCE_DATA srDes = {0};
+		srDes.pSysMem = data;
+		srDes.SysMemPitch=width*4;//4 rgba
+		srDes.SysMemSlicePitch = 0;
+		D3D11_TEXTURE2D_DESC tDes;
+		tDes.Width = width;
+		tDes.Height = height;
+		tDes.MipLevels = 1;
+		tDes.ArraySize=1;
+		tDes.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+		//tDes.Format = DXGI_FORMAT_R8G8B8A8_UINT;
+		tDes.SampleDesc.Count = 1;
+		tDes.SampleDesc.Quality = 0;
+		tDes.Usage = D3D11_USAGE_DEFAULT;
+		tDes.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+		tDes.CPUAccessFlags = 0;
+		tDes.MiscFlags = 0;//D3D11_RESOURCE_MISC_GENERATE_MIPS;
+		hr = device->CreateTexture2D( &tDes, &srDes, &tex_ptr);
+		if(FAILED(hr))
+			printf("Failed creating texture2d tex%x\n",hr);
+
+		//shader resource view
+		hr = device->CreateShaderResourceView(tex_ptr, NULL, &res_ptr);
+		if(FAILED(hr))
+			printf("Failed creating shader resource %d\n",hr);
+		//device_context_ptr->GenerateMips(res_ptr);
+	}
+};
 
 #endif

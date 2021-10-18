@@ -16,8 +16,8 @@ int targetScreenHeight=1080;
 #include <windows.h>
 #include "io.h"
 #include "vector.h"
-#include "image.h"
 #include "input.h"
+#include "image.h"
 #include "font.h"
 #include "game.h"
 #include <assert.h>

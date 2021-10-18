@@ -8,6 +8,9 @@ struct vs_out {
 	float2 uv : UV;
 };
 
+Texture2D textureMap : register(t0);
+SamplerState sampleState : register(s0);
+
 vs_out vs_main(vs_in input){
 	vs_out output = (vs_out)0;
 	output.position_clip =float4(input.position,0.0,1.0);
@@ -16,6 +19,7 @@ vs_out vs_main(vs_in input){
 }
 
 float4 ps_main(vs_out input) : SV_TARGET {
+	return textureMap.Sample(sampleState,input.uv);
 	return float4(input.uv.x,input.uv.y,0.0,1);
 	//return float4(0.1,0.1,0.1,1);
 }

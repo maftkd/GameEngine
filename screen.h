@@ -314,24 +314,24 @@ void setClearColor(vec4 col){
 	curFrameRenderCommands.clearColor=col;
 }
 
-void testAddChar(float left, float bottom, float width, float height){
+void testAddChar(float left, float bottom, float width, float height,float uLeft,float vBot, float uRight, float vTop){
 	int startIndex=curFrameRenderCommands.numCharVerts*4;
 	curFrameRenderCommands.charVerts[startIndex]=left;
 	curFrameRenderCommands.charVerts[startIndex+1]=bottom;
-	curFrameRenderCommands.charVerts[startIndex+2]=0;
-	curFrameRenderCommands.charVerts[startIndex+3]=0;
+	curFrameRenderCommands.charVerts[startIndex+2]=uLeft;
+	curFrameRenderCommands.charVerts[startIndex+3]=vBot;
 	curFrameRenderCommands.charVerts[startIndex+4]=left;
 	curFrameRenderCommands.charVerts[startIndex+5]=bottom+height;
-	curFrameRenderCommands.charVerts[startIndex+6]=0;
-	curFrameRenderCommands.charVerts[startIndex+7]=1;
+	curFrameRenderCommands.charVerts[startIndex+6]=uLeft;
+	curFrameRenderCommands.charVerts[startIndex+7]=vTop;
 	curFrameRenderCommands.charVerts[startIndex+8]=left+width;
 	curFrameRenderCommands.charVerts[startIndex+9]=bottom;
-	curFrameRenderCommands.charVerts[startIndex+10]=1;
-	curFrameRenderCommands.charVerts[startIndex+11]=0;
+	curFrameRenderCommands.charVerts[startIndex+10]=uRight;
+	curFrameRenderCommands.charVerts[startIndex+11]=vBot;
 	curFrameRenderCommands.charVerts[startIndex+12]=left+width;
 	curFrameRenderCommands.charVerts[startIndex+13]=bottom+height;
-	curFrameRenderCommands.charVerts[startIndex+14]=1;
-	curFrameRenderCommands.charVerts[startIndex+15]=1;
+	curFrameRenderCommands.charVerts[startIndex+14]=uRight;
+	curFrameRenderCommands.charVerts[startIndex+15]=vTop;
 	curFrameRenderCommands.numCharVerts+=4;
 	curFrameRenderCommands.charVertsChanged=true;
 }
@@ -354,6 +354,9 @@ void compileTestShader(){
 	};
 	testShader.setLayout(inputElementLayout, 2);
 }
+
+//todo think about this
+ID3D11ShaderResourceView* fontRes;
 
 //todo move this
 //temp code test stride and vert offset
@@ -386,6 +389,7 @@ DWORD WINAPI renderThread( LPVOID lpParam )
 
 		//draw chars
 		testShader.use();
+		deviceContext->PSSetShaderResources(0,1,&fontRes);
 		deviceContext->IASetIndexBuffer(charIndices,DXGI_FORMAT_R32_UINT,0);
 		deviceContext->IASetVertexBuffers(0,1,&charVertices,&stride,&vertOffset );
 		deviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST );

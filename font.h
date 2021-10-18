@@ -347,13 +347,12 @@ void fontAtlasTest(simpleGlyph *glyphs,int texSize=512,float imageScale=0.1,floa
 					minDist=maxDist;
 				float normDist=(minSign*minDist)/maxDist;
 				normDist=(normDist+1)*0.5f;
-				pixels[pixelIndex]=(int)(255*normDist);
-				pixels[pixelIndex+1]=(int)(255*normDist);
-				pixels[pixelIndex+2]=(int)(255*normDist);
+				pixels[pixelIndex]=(int)(255*normDist);//b
+				pixels[pixelIndex+1]=(int)(255*normDist);//g
+				pixels[pixelIndex+2]=(int)(255*normDist);//r
 			}
 		}
 	}
-	//exportBitmapBgra("images/fontAtlas.bmp",texSize,texSize,pixels,numBytes);
 	exportBitmapBgr("fonts/fontAtlas.bmp",texSize,texSize,pixels,numBytes);
 
 	printf("done exporting bitmap, time to write glyph data\n");
@@ -688,28 +687,56 @@ void importFont(char* fontName){
 	fontAtlasTest(glyphs,512,0.1,0.75);
 }
 
+tex2D fontTex;
+typedef struct {
+	float uLeft;
+	float vBot;
+	float uRight;
+	float vTop;
+} fd;
+fd * fontDat;
 void loadFont(char* path){
 	char * dataPath = new char[strlen(path)+5];
+	char * texPath = new char[strlen(path)+4];
 	strcpy(dataPath,path);
+	strcpy(texPath,path);
 	char * dataExt = ".fdat";
+	char * texExt = ".bmp";
 	strncat(dataPath,dataExt,5);
+	strncat(texPath,texExt,4);
 	printf("loading font data from %s\n",dataPath);
 	unsigned char * fontData = readAllBytes(dataPath);
+	//tmp just logs this stuff out
+	//to do save these numbers in some font data struct
 	float uLeft;
 	float vBot;
 	float uRight;
 	float vTop;
 	float pad;
+	fontDat = new fd[128];
 	memcpy(&pad,&fontData[0],4);
 	printf("font atlas padding %f\n",pad);
 	for(int i=0; i<94; i++){
 		int charCode=i+33;
-		memcpy(&uLeft,&fontData[4+i*16],4);
-		memcpy(&vBot,&fontData[4+i*16+4],4);
-		memcpy(&uRight,&fontData[4+i*16+8],4);
-		memcpy(&vTop,&fontData[4+i*16+12],4);
-		printf("char: %c, bl(%f,%f) tr(%f,%f)\n",charCode,uLeft,vBot,uRight,vTop);
+		memcpy(&fontDat[charCode].uLeft,&fontData[4+i*16],4);
+		memcpy(&fontDat[charCode].vBot,&fontData[4+i*16+4],4);
+		memcpy(&fontDat[charCode].uRight,&fontData[4+i*16+8],4);
+		memcpy(&fontDat[charCode].vTop,&fontData[4+i*16+12],4);
+		//printf("char: %c, bl(%f,%f) tr(%f,%f)\n",charCode,uLeft,vBot,uRight,vTop);
+		printf("char: %c, bl(%f,%f) tr(%f,%f)\n",charCode,fontDat[charCode].uLeft,fontDat[charCode].vBot,
+				fontDat[charCode].uRight,fontDat[charCode].vTop);
 	}
+	fontDat[32].uLeft=0;
+	fontDat[32].uRight=0;
+	fontDat[32].vBot=0;
+	fontDat[32].vTop=0;
+	//load font atlas texture into memory
+	printf("loading font atlas from %s\n",texPath);
+	//int width,height;
+	//importBitmap(texPath,&width,&height,NULL);
+	//printf("Image size (%d,%d)\n",width,height);
+	fontTex = tex2D(texPath);
+	fontRes=fontTex.res_ptr;
 }
 
 //splt
@@ -736,7 +763,8 @@ void testTypeString(char* text, float startX, float startY, float squareWidth){
 		float yOffset=0;
 		float width=squareWidth;
 		float height=width*aspect;
-		testAddChar(x,y+yOffset,width,height);
+		fd fData = fontDat[text[i]];
+		testAddChar(x,y+yOffset,width,height,fData.uLeft,fData.vBot,fData.uRight,fData.vTop);
 		float advanceWidth=width*1.1f;
 		x+=advanceWidth;
 	}
@@ -746,7 +774,7 @@ void initFontEditor(){
 	printf("initializing font editor yo\n");
 	//importFont("fonts/Moonrising.ttf");
 	//importFont("fonts/Gorehand.otf");
-	importFont("fonts/source/Envy Code R.ttf");
+	//importFont("fonts/source/Envy Code R.ttf");
 	//importFont("fonts/Grethania Script Reguler.ttf");
 	//importFont("fonts/arial.ttf");
 	//importFont("fonts/times.ttf");
@@ -755,6 +783,8 @@ void initFontEditor(){
 	//on char typed -> type character
 	loadFont("fonts/fontAtlas");
 	//testTypeString("Hello World",-1.0f,0,0.1f);
+	testTypeString("The quick brown fox jumped over the lazy dog",-1.0f,0,0.02f);
+	testTypeString("THE QUICK BROWN FOX JUMPED OVER THE LAZY DOG",-1.0f,-0.1f,0.04f);
 }
 
 void updateFontEditor(){
