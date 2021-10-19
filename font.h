@@ -1,6 +1,9 @@
 #ifndef FONT_H
 #define FONT_H
 
+const short numChars=95;
+const short charOffset=32;
+
 typedef struct {
 	unsigned int sfnt;
 	unsigned short numTables;
@@ -61,6 +64,7 @@ typedef struct {
 	short directionHint;
 	short indexToLocFormat;
 } header;
+header head;
 
 typedef struct {
 	short numberOfContours;
@@ -164,25 +168,25 @@ struct node{
 };
 
 //simple func to pack the glyphs in a grid layout
+//also generates accompanying .fdat file
 void fontAtlasTest(simpleGlyph *glyphs,int texSize=512,float imageScale=0.1,float secondaryScale=0.75){
-
 	//get bounds
-	for(int i=0; i<94;i++){
+	for(int i=0; i<numChars;i++){
 		vec2 size = vec2(glyphs[i].xMax-glyphs[i].xMin,glyphs[i].yMax-glyphs[i].yMin);
 		//scale image down for faster testing
 		size*=imageScale;
 		size.round();
-		//printf("%d,%f,%f\n",(i+33),size.x,size.y);
+		//printf("%d,%f,%f\n",(i+32),size.x,size.y);
 		glyphs[i].size=size;
 	}
 
-	int * mapping = new int[94];
-	for(int i=0;i<94;i++){
+	int * mapping = new int[numChars];
+	for(int i=0;i<numChars;i++){
 		mapping[i]=i;
 	}
 	//bubble sort these guys biggest to smallest
-	for(int i=0; i<94-1; i++){
-		for(int j=0; j<94-1-i;j++){
+	for(int i=0; i<numChars-1; i++){
+		for(int j=0; j<numChars-1-i;j++){
 			//compare area
 			float aCur=glyphs[j].size.x*glyphs[j].size.y;
 			float aNext=glyphs[j+1].size.x*glyphs[j+1].size.y;
@@ -207,7 +211,7 @@ void fontAtlasTest(simpleGlyph *glyphs,int texSize=512,float imageScale=0.1,floa
 		//insert the glyphs
 		node root;
 		root.init(vec4(0,0,texSize,texSize));
-		for(int i=0; i<94; i++){
+		for(int i=0; i<numChars; i++){
 			if(!root.insert(glyphs,i))
 				fit=false;
 		}
@@ -217,18 +221,21 @@ void fontAtlasTest(simpleGlyph *glyphs,int texSize=512,float imageScale=0.1,floa
 	int numPixels=texSize*texSize;
 	int numBytes=numPixels*3;
 	unsigned char* pixels= new unsigned char[numBytes];
-	for(int i=0; i<94; i++){
-		printf("rasterizing %c\n",(mapping[i]+33));
+	for(int i=0; i<numChars; i++){
+		printf("rasterizing %c\n",(mapping[i]+32));
 		vec2 mainOffset = vec2(-glyphs[i].xMin,-glyphs[i].yMin);//offset based on ttf data
 
 		//pad the data so it's centered with some space around the edges
 		vec2 paddingOffset = glyphs[i].size*(1-secondaryScale)*0.5f;
 		paddingOffset.round();
-		//printf("paddingOffset (%f,%f)\n",paddingOffset.x,paddingOffset.y);
 
 		//break contours into edge segments
 		int bezierCurvePoints=3;
 		int numContours = glyphs[i].numberOfContours;
+
+		//skip for 'space'
+		if(numContours<=0)
+			continue;
 		vec2** contours = new vec2*[numContours];
 		int* numContourEdgeSegments = new int[numContours];
 		int curPoint=0;
@@ -356,28 +363,38 @@ void fontAtlasTest(simpleGlyph *glyphs,int texSize=512,float imageScale=0.1,floa
 	exportBitmapBgr("fonts/fontAtlas.bmp",texSize,texSize,pixels,numBytes);
 
 	printf("done exporting bitmap, time to write glyph data\n");
-	const int fontDataSize=94*4*4+4;
+	const int glyphStride=4*4+6*2;
+	const int headerSize=6;
+	const int fontDataSize=numChars*(glyphStride)+headerSize;
 	unsigned char fontDataTest[fontDataSize] = {0};
 	float pad=1-secondaryScale;
+	//first padding
 	memcpy(&fontDataTest[0],&pad,4);
-	for(int i=0; i<94; i++){
+	//then units per em
+	memcpy(&fontDataTest[4],&head.unitsPerEm,2);
+	//then glyph data
+	for(int i=0; i<numChars; i++){
 		int gIndex = mapping[i];
-		printf("writing glyph data for %c\n",(gIndex+33));
-		//need:
-		//size
+		printf("writing glyph data for %c\n",(gIndex+32));
+		//normalize pixel cords to UV cords
 		float uLeft=glyphs[i].offset.x/texSize;
 		float vBot=glyphs[i].offset.y/texSize;
 		float uRight=uLeft+glyphs[i].size.x/texSize;
 		float vTop=vBot+glyphs[i].size.y/texSize;
-		//printf("bottom left UV = (%f,%f)\n",uLeft,vBot);
-		memcpy(&fontDataTest[4+gIndex*16],&uLeft,4);
-		memcpy(&fontDataTest[4+gIndex*16+4],&vBot,4);
-		memcpy(&fontDataTest[4+gIndex*16+8],&uRight,4);
-		memcpy(&fontDataTest[4+gIndex*16+12],&vTop,4);
-		memcpy(&fontDataTest[4+gIndex*16+12],&vTop,4);
-		//offset
-		//advance width
+		//copy uv cords
+		memcpy(&fontDataTest[headerSize+gIndex*glyphStride],&uLeft,4);
+		memcpy(&fontDataTest[headerSize+gIndex*glyphStride+4],&vBot,4);
+		memcpy(&fontDataTest[headerSize+gIndex*glyphStride+8],&uRight,4);
+		memcpy(&fontDataTest[headerSize+gIndex*glyphStride+12],&vTop,4);
+		//copy bounds
+		memcpy(&fontDataTest[headerSize+gIndex*glyphStride+16],&glyphs[i].xMin,2);
+		memcpy(&fontDataTest[headerSize+gIndex*glyphStride+18],&glyphs[i].yMin,2);
+		memcpy(&fontDataTest[headerSize+gIndex*glyphStride+20],&glyphs[i].xMax,2);
+		memcpy(&fontDataTest[headerSize+gIndex*glyphStride+22],&glyphs[i].yMax,2);
 		//left side bearing
+		memcpy(&fontDataTest[headerSize+gIndex*glyphStride+24],&glyphs[i].leftSideBearing,2);
+		//advance width
+		memcpy(&fontDataTest[headerSize+gIndex*glyphStride+26],&glyphs[i].advanceWidth,2);
 	}
 	writeAllBytes("fonts/fontAtlas.fdat",fontDataTest,fontDataSize);
 }
@@ -394,7 +411,6 @@ void importFont(char* fontName){
 	unsigned int hmtxStart;
 	unsigned short * glyphIndices;
 	unsigned short numHMetrics;
-	header head;
 
 	//load offset subtable
 	memcpy(&mFont.offSub.sfnt, &fontRaw[0],4);
@@ -464,9 +480,9 @@ void importFont(char* fontName){
 			}
 			printf("num mappings %d\n",numMappings);
 
-			glyphIndices = new unsigned short[126-33+1];//indices for chars 33 - 126
-			for(int j=0; j<94; j++){
-				unsigned short codePoint=j+33;
+			glyphIndices = new unsigned short[126-32+1];//indices for chars 32 - 126
+			for(int j=0; j<numChars; j++){
+				unsigned short codePoint=j+32;
 				bool glyphFound=false;
 				for(int k=0; k<segCount&&!glyphFound; k++){
 					if(format.endCode[k]>=codePoint){
@@ -538,7 +554,7 @@ void importFont(char* fontName){
 	//glyph time
 	unsigned int glyphOffset;
 	unsigned short glyphOffsetShort;
-	int numGlyphs=94;
+	int numGlyphs=numChars;
 	simpleGlyph* glyphs = new simpleGlyph[numGlyphs];
 	for(int i=0; i<numGlyphs; i++){
 		//printf("reading glyph data at index %d. glyph index %d\n",i,glyphIndices[i]);
@@ -670,7 +686,7 @@ void importFont(char* fontName){
 		copyBigEndian(&advanceWidth,fontRaw,hmtxStart+i*4);
 		copyBigEndian(&leftSideBearing,fontRaw,hmtxStart+i*4+2);
 		int charCode=-1;
-		for(int j=0; j<95;j++){
+		for(int j=0; j<numChars;j++){
 			if(glyphIndices[j]==i)
 				charCode=j+32;
 		}
@@ -678,8 +694,8 @@ void importFont(char* fontName){
 		{
 			//printf("Char:%d\t\tAdv: %d\tLSB: %d\n",charCode,advanceWidth,leftSideBearing);
 			//save advance width and lsb to the glyphs array
-			glyphs[charCode-33].leftSideBearing=leftSideBearing;
-			glyphs[charCode-33].advanceWidth=advanceWidth;
+			glyphs[charCode-32].leftSideBearing=leftSideBearing;
+			glyphs[charCode-32].advanceWidth=advanceWidth;
 
 		}
 	}
@@ -687,14 +703,26 @@ void importFont(char* fontName){
 	fontAtlasTest(glyphs,512,0.1,0.75);
 }
 
+//hmmm maybe these structs should go at the top?
 tex2D fontTex;
 typedef struct {
 	float uLeft;
 	float vBot;
 	float uRight;
 	float vTop;
-} fd;
-fd * fontDat;
+	short xMin;
+	short yMin;
+	short xMax;
+	short yMax;
+	unsigned short lsb;
+	unsigned short advance;
+} glyphData;
+typedef struct {
+	glyphData* gData;
+	unsigned short upm;
+	float padding;
+} fontData;
+fontData mFontData;
 void loadFont(char* path){
 	char * dataPath = new char[strlen(path)+5];
 	char * texPath = new char[strlen(path)+4];
@@ -705,31 +733,38 @@ void loadFont(char* path){
 	strncat(dataPath,dataExt,5);
 	strncat(texPath,texExt,4);
 	printf("loading font data from %s\n",dataPath);
-	unsigned char * fontData = readAllBytes(dataPath);
+	unsigned char * fdBytes = readAllBytes(dataPath);
 	//tmp just logs this stuff out
 	//to do save these numbers in some font data struct
 	float uLeft;
 	float vBot;
 	float uRight;
 	float vTop;
-	float pad;
-	fontDat = new fd[128];
-	memcpy(&pad,&fontData[0],4);
-	printf("font atlas padding %f\n",pad);
-	for(int i=0; i<94; i++){
-		int charCode=i+33;
-		memcpy(&fontDat[charCode].uLeft,&fontData[4+i*16],4);
-		memcpy(&fontDat[charCode].vBot,&fontData[4+i*16+4],4);
-		memcpy(&fontDat[charCode].uRight,&fontData[4+i*16+8],4);
-		memcpy(&fontDat[charCode].vTop,&fontData[4+i*16+12],4);
-		//printf("char: %c, bl(%f,%f) tr(%f,%f)\n",charCode,uLeft,vBot,uRight,vTop);
-		printf("char: %c, bl(%f,%f) tr(%f,%f)\n",charCode,fontDat[charCode].uLeft,fontDat[charCode].vBot,
-				fontDat[charCode].uRight,fontDat[charCode].vTop);
+	//fontDat = new fd[128];
+	mFontData.gData = new glyphData[128];
+	//read header
+	memcpy(&mFontData.padding,&fdBytes[0],4);
+	memcpy(&mFontData.upm,&fdBytes[4],2);
+	int headerSize=6;
+	int glyphStride=4*4+6*2;
+	//read font data
+	for(int i=0; i<numChars; i++){
+		int charCode=i+32;
+		//get uv coords
+		memcpy(&mFontData.gData[charCode].uLeft,&fdBytes[headerSize+i*glyphStride],4);
+		memcpy(&mFontData.gData[charCode].vBot,&fdBytes[headerSize+i*glyphStride+4],4);
+		memcpy(&mFontData.gData[charCode].uRight,&fdBytes[headerSize+i*glyphStride+8],4);
+		memcpy(&mFontData.gData[charCode].vTop,&fdBytes[headerSize+i*glyphStride+12],4);
+		//get pixel bounds
+		memcpy(&mFontData.gData[charCode].xMin,&fdBytes[headerSize+i*glyphStride+16],2);
+		memcpy(&mFontData.gData[charCode].yMin,&fdBytes[headerSize+i*glyphStride+18],2);
+		memcpy(&mFontData.gData[charCode].xMax,&fdBytes[headerSize+i*glyphStride+20],2);
+		memcpy(&mFontData.gData[charCode].yMax,&fdBytes[headerSize+i*glyphStride+22],2);
+		//get lsb
+		memcpy(&mFontData.gData[charCode].lsb,&fdBytes[headerSize+i*glyphStride+24],2);
+		//get advance
+		memcpy(&mFontData.gData[charCode].advance,&fdBytes[headerSize+i*glyphStride+26],2);
 	}
-	fontDat[32].uLeft=0;
-	fontDat[32].uRight=0;
-	fontDat[32].vBot=0;
-	fontDat[32].vTop=0;
 	//load font atlas texture into memory
 	printf("loading font atlas from %s\n",texPath);
 	//int width,height;
@@ -741,7 +776,7 @@ void loadFont(char* path){
 
 //splt
 
-void testTypeString(char* text, float startX, float startY, float squareWidth){
+void testTypeString(char* text, float startX, float startY, float squareSize){
 	//move cursor to start
 	float x = startX;
 	float y = startY;
@@ -760,16 +795,36 @@ void testTypeString(char* text, float startX, float startY, float squareWidth){
 
 		//temp code until we get font data
 		printf("typing char %c\n",text[i]);
-		float yOffset=0;
-		float width=squareWidth;
-		float height=width*aspect;
-		fd fData = fontDat[text[i]];
-		testAddChar(x,y+yOffset,width,height,fData.uLeft,fData.vBot,fData.uRight,fData.vTop);
-		float advanceWidth=width*1.1f;
+		glyphData glyph = mFontData.gData[text[i]];
+		printf("lsb %d\n",glyph.lsb);
+		//get dimensions in UPM
+		short w = (glyph.xMax-glyph.xMin);
+		short h = (glyph.yMax-glyph.yMin);
+		//convert dimensions to NDC
+		float height=(h/(float)mFontData.upm)*squareSize;
+		float width=(w/(float)mFontData.upm)*squareSize/aspect;
+		//cancel padding on bottom
+		float yOffset = -mFontData.padding*0.5f*height;
+		//adjust for glyphs starting above or below baseline
+		yOffset+=height*(1-mFontData.padding)*(glyph.yMin/(float)h);
+		/*
+		float height=squareSize;
+		float width=height/aspect;
+		float height=squareSize;
+		float glyphHeight=(glyph.vTop-glyph.vBot);
+		float glyphWidth=(glyph.uRight-glyph.uLeft);
+		float gAspect = glyphWidth/glyphHeight;
+		float width = glyphWidth==0 ? height/aspect : height/aspect*gAspect;
+		*/
+		//float width=height/aspect;
+		//calculate glyph aspect from uvs
+		testAddChar(x,y+yOffset,width,height,glyph.uLeft,glyph.vBot,glyph.uRight,glyph.vTop);
+		float advanceWidth=width;//*1.1f;
 		x+=advanceWidth;
 	}
 }
 
+// Start
 void initFontEditor(){
 	printf("initializing font editor yo\n");
 	//importFont("fonts/Moonrising.ttf");
@@ -783,8 +838,10 @@ void initFontEditor(){
 	//on char typed -> type character
 	loadFont("fonts/fontAtlas");
 	//testTypeString("Hello World",-1.0f,0,0.1f);
-	testTypeString("The quick brown fox jumped over the lazy dog",-1.0f,0,0.02f);
-	testTypeString("THE QUICK BROWN FOX JUMPED OVER THE LAZY DOG",-1.0f,-0.1f,0.04f);
+	testTypeString("The quick brown fox jumped over the lazy dog",-0.95f,0,0.2f);
+	//testTypeString("The quick",-1.0f,0,0.2f);
+	//testTypeString("THE QUICK BROWN FOX JUMPED OVER THE LAZY DOG",-1.0f,-0.1f,0.04f);
+	//testTypeString("HI!@#$%^&*()-=_+[{]}\\|'\";:,<.>/?",-1.0f,-0.2f,0.04f);
 }
 
 void updateFontEditor(){
