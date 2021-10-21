@@ -82,7 +82,7 @@ typedef struct {
 	bool* onCurve;
 	vec2 size;
 	vec2 offset;
-	unsigned short leftSideBearing;
+	short leftSideBearing;
 	unsigned short advanceWidth;
 } simpleGlyph;
 
@@ -234,7 +234,7 @@ void fontAtlasTest(simpleGlyph *glyphs,int texSize=512,float imageScale=0.1,floa
 		int numContours = glyphs[i].numberOfContours;
 
 		//skip for 'space'
-		if(numContours<=0)
+		if(numContours<=0 || mapping[i]+32==32)
 			continue;
 		vec2** contours = new vec2*[numContours];
 		int* numContourEdgeSegments = new int[numContours];
@@ -381,6 +381,7 @@ void fontAtlasTest(simpleGlyph *glyphs,int texSize=512,float imageScale=0.1,floa
 		float vBot=glyphs[i].offset.y/texSize;
 		float uRight=uLeft+glyphs[i].size.x/texSize;
 		float vTop=vBot+glyphs[i].size.y/texSize;
+		printf("bl: (%f,%f) tr: (%f,%f)\n",uLeft,vBot,uRight,vTop);
 		//copy uv cords
 		memcpy(&fontDataTest[headerSize+gIndex*glyphStride],&uLeft,4);
 		memcpy(&fontDataTest[headerSize+gIndex*glyphStride+4],&vBot,4);
@@ -409,6 +410,7 @@ void importFont(char* fontName){
 	unsigned int glyphStart;
 	unsigned int hheaStart;
 	unsigned int hmtxStart;
+	unsigned int kernStart;
 	unsigned short * glyphIndices;
 	unsigned short numHMetrics;
 
@@ -425,6 +427,7 @@ void importFont(char* fontName){
 	for(int i=0; i<mFont.offSub.numTables; i++){
 		memcpy(&mFont.tableDirs[i].tag,&fontRaw[12+i*16],4);
 		mFont.tableDirs[i].tag_c[4]=0;
+		//printf("table: %s\n",mFont.tableDirs[i].tag_c);
 		copyBigEndian(&mFont.tableDirs[i].checkSum,fontRaw,12+i*16+4);
 		copyBigEndian(&mFont.tableDirs[i].offset,fontRaw,12+i*16+8);
 		copyBigEndian(&mFont.tableDirs[i].length,fontRaw,12+i*16+12);
@@ -548,6 +551,13 @@ void importFont(char* fontName){
 		if(strcmp(mFont.tableDirs[i].tag_c,"hmtx")==0){
 			hmtxStart = mFont.tableDirs[i].offset;
 			printf("found hmtx w/ offset %d\n",hmtxStart);
+		}
+		if(strcmp(mFont.tableDirs[i].tag_c,"kern")==0){
+			kernStart = mFont.tableDirs[i].offset;
+			unsigned int version;
+			unsigned int numTables;
+			copyBigEndian(&version,fontRaw,kernStart);
+			printf("found kern table @ %d, version: %d\n",kernStart,version);
 		}
 	}
 	
@@ -714,7 +724,7 @@ typedef struct {
 	short yMin;
 	short xMax;
 	short yMax;
-	unsigned short lsb;
+	short lsb;
 	unsigned short advance;
 } glyphData;
 typedef struct {
@@ -794,33 +804,43 @@ void testTypeString(char* text, float startX, float startY, float squareSize){
 		//x+=advance_width
 
 		//temp code until we get font data
-		printf("typing char %c\n",text[i]);
 		glyphData glyph = mFontData.gData[text[i]];
-		printf("lsb %d\n",glyph.lsb);
+
 		//get dimensions in UPM
 		short w = (glyph.xMax-glyph.xMin);
 		short h = (glyph.yMax-glyph.yMin);
+		//get percentage of M square UPMP
+		float charWidthUPMP = (w/(float)mFontData.upm);
+		float charHeightUPMP = (h/(float)mFontData.upm);
+		float lsbUPMP = (glyph.lsb/(float)mFontData.upm);
+		float yOffUPMP = (glyph.yMin/(float)mFontData.upm);
+		float advanceUPMP = (glyph.advance/(float)mFontData.upm);
 		//convert dimensions to NDC
-		float height=(h/(float)mFontData.upm)*squareSize;
-		float width=(w/(float)mFontData.upm)*squareSize/aspect;
+		float squareHeightNDC = squareSize;
+		float squareWidthNDC = squareSize/aspect;
+		float charWidthNDC = squareWidthNDC*charWidthUPMP;
+		float charHeightNDC = squareHeightNDC*charHeightUPMP;
+		float quadHeightNDC = charHeightNDC/(1.0-mFontData.padding);
+		float quadWidthNDC = charWidthNDC/(1.0-mFontData.padding);
+		float verPaddingNDC = (quadHeightNDC-charHeightNDC)*0.5f;
+		float horPaddingNDC = (quadWidthNDC-charWidthNDC)*0.5f;
+		float lsbNDC = lsbUPMP*squareWidthNDC;
+		float yOffNDC = yOffUPMP*squareHeightNDC;
+		float advanceNDC = advanceUPMP*squareWidthNDC;
 		//cancel padding on bottom
-		float yOffset = -mFontData.padding*0.5f*height;
+		//float yOffset=0;
+		//float yOffset = -mFontData.padding*0.5f*quadHeightNDC;
 		//adjust for glyphs starting above or below baseline
-		yOffset+=height*(1-mFontData.padding)*(glyph.yMin/(float)h);
-		/*
-		float height=squareSize;
-		float width=height/aspect;
-		float height=squareSize;
-		float glyphHeight=(glyph.vTop-glyph.vBot);
-		float glyphWidth=(glyph.uRight-glyph.uLeft);
-		float gAspect = glyphWidth/glyphHeight;
-		float width = glyphWidth==0 ? height/aspect : height/aspect*gAspect;
-		*/
-		//float width=height/aspect;
-		//calculate glyph aspect from uvs
-		testAddChar(x,y+yOffset,width,height,glyph.uLeft,glyph.vBot,glyph.uRight,glyph.vTop);
-		float advanceWidth=width;//*1.1f;
-		x+=advanceWidth;
+		//yOffset+=charHeightNDC*(1-mFontData.padding)*(glyph.yMin/(float)h);
+		//add char
+		testAddChar(x-horPaddingNDC+lsbNDC,y-verPaddingNDC+yOffNDC,quadWidthNDC,quadHeightNDC,glyph.uLeft,glyph.vBot,glyph.uRight,glyph.vTop);
+		//float advanceWidth=width;//*1.1f;
+		//float advanceWidth=(glyph.advance/(float)mFontData.upm)*(squareSize/aspect)*(1.0-mFontData.padding);
+		//float lsb = (glyph.lsb/(float)mFontData.upm)*(squareSize/aspect);
+
+		//move cursor
+		float advanceWidth=advanceNDC+horPaddingNDC*0.5f;//+lsb;
+		x+=advanceWidth;//+lsb;
 	}
 }
 
@@ -830,7 +850,7 @@ void initFontEditor(){
 	//importFont("fonts/Moonrising.ttf");
 	//importFont("fonts/Gorehand.otf");
 	//importFont("fonts/source/Envy Code R.ttf");
-	//importFont("fonts/Grethania Script Reguler.ttf");
+	importFont("fonts/source/Grethania Script Reguler.ttf");
 	//importFont("fonts/arial.ttf");
 	//importFont("fonts/times.ttf");
 	//addTriangle(-0.5,-0.5,0.0,0.5,0.5,-0.5);
@@ -838,7 +858,7 @@ void initFontEditor(){
 	//on char typed -> type character
 	loadFont("fonts/fontAtlas");
 	//testTypeString("Hello World",-1.0f,0,0.1f);
-	testTypeString("The quick brown fox jumped over the lazy dog",-0.95f,0,0.2f);
+	testTypeString("The quick brown fox jumped over the lazy dog",-0.95f,0,0.1f);
 	//testTypeString("The quick",-1.0f,0,0.2f);
 	//testTypeString("THE QUICK BROWN FOX JUMPED OVER THE LAZY DOG",-1.0f,-0.1f,0.04f);
 	//testTypeString("HI!@#$%^&*()-=_+[{]}\\|'\";:,<.>/?",-1.0f,-0.2f,0.04f);
