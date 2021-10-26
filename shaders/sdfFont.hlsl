@@ -20,20 +20,17 @@ vs_out vs_main(vs_in input){
 
 float4 ps_main(vs_out input) : SV_TARGET {
 	float4 c = textureMap.Sample(sampleState,input.uv);
+	//good for fancy script
 	/*
 	float d = c.r;
-	float txt = step(0.3,d)*step(d,0.7);
-	float4 outlineColor = float4(0,0,0,1);
-	float4 txtColor = float4(1,1,1,1);
-	float4 col = lerp(txtColor,outlineColor,txt);
-	return col*smoothstep(0.2,0.4,d);
+	float dd = smoothstep(0.35,0.55,d);
 	*/
-	float d = c.r-0.5;
-	float dd = d/fwidth(d)+0.5;
-	//txt*=step(txt,0.9);
-	//float txt = smoothstep(0.35,0.55,d/fwidth(d));
-	float txt = clamp(dd+0.5,0.0,1.0);
-	//float outline = clamp(d/
-	float4 txtCol = float4(1,1,1,1);
-	return txt*txtCol;
+	//good for simpler fonts
+	float d = c.r-0.47;
+	clip(d);
+	float dd = smoothstep(0,0.03,d);
+	//float dd = d/fwidth(d)+0.5;
+	float4 txtCol = dd*float4(1,1,1,1);
+	//return dd*txtCol;
+	return txtCol;
 }

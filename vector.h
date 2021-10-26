@@ -795,6 +795,7 @@ float isOnRight(vec2 v, vec2 p){
 	return sign(c.z);
 }
 
+//#todo fix this. Artifacts in this show up pretty big in the final product
 float signedDistanceToEdge(vec2 a, vec2 b, vec2 p){
 	float rise = b.y-a.y;
 	float run = b.x-a.x;

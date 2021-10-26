@@ -713,7 +713,7 @@ void importFont(char* fontName){
 		}
 	}
 
-	fontAtlasTest(glyphs,512,64,0.8);
+	fontAtlasTest(glyphs,512,48,0.6);
 }
 
 //hmmm maybe these structs should go at the top?
@@ -789,35 +789,26 @@ void loadFont(char* path){
 
 //splt
 
-void testTypeString(char* text, float startX, float startY, float squareSize){
+void drawString(char* text, float startX, float startY, float squareSize, int numChars=-1){
 	//move cursor to start
 	float x = startX;
 	float y = startY;
-	//get LSB for first char
-	//x += lsb
-	for(int i=0; i<strlen(text); i++){
-		//get char yOffset from char bounding box
-		//yOff = normalize(bounding box -> yMin)
-		//get char width from bounding box
-		//width = normalize(bounding box -> xMax-xMin)
-		//get char height from bounding box
-		//height = normalize(bounding box -> yMax-yMin)
-		//draw char(x,y+yOff,width,height)
-		//advance cursor by ADV_WIDTH
-		//x+=advance_width
-
-		//temp code until we get font data
+	int count = numChars==-1? strlen(text) : numChars;
+	for(int i=0; i<count; i++){
+		//get data for glyph
 		glyphData glyph = mFontData.gData[text[i]];
 
 		//get dimensions in UPM
 		short w = (glyph.xMax-glyph.xMin);
 		short h = (glyph.yMax-glyph.yMin);
+
 		//get percentage of M square UPMP
 		float charWidthUPMP = (w/(float)mFontData.upm);
 		float charHeightUPMP = (h/(float)mFontData.upm);
 		float lsbUPMP = (glyph.lsb/(float)mFontData.upm);
 		float yOffUPMP = (glyph.yMin/(float)mFontData.upm);
 		float advanceUPMP = (glyph.advance/(float)mFontData.upm);
+
 		//convert dimensions to NDC
 		float squareHeightNDC = squareSize;
 		float squareWidthNDC = squareSize/aspect;
@@ -830,22 +821,65 @@ void testTypeString(char* text, float startX, float startY, float squareSize){
 		float lsbNDC = lsbUPMP*squareWidthNDC;
 		float yOffNDC = yOffUPMP*squareHeightNDC;
 		float advanceNDC = advanceUPMP*squareWidthNDC;
-		//cancel padding on bottom
-		//float yOffset=0;
-		//float yOffset = -mFontData.padding*0.5f*quadHeightNDC;
-		//adjust for glyphs starting above or below baseline
-		//yOffset+=charHeightNDC*(1-mFontData.padding)*(glyph.yMin/(float)h);
-		//add char
-		testAddChar(x-horPaddingNDC+lsbNDC,y-verPaddingNDC+yOffNDC,quadWidthNDC,quadHeightNDC,glyph.uLeft,glyph.vBot,glyph.uRight,glyph.vTop);
-		//float advanceWidth=width;//*1.1f;
-		//float advanceWidth=(glyph.advance/(float)mFontData.upm)*(squareSize/aspect)*(1.0-mFontData.padding);
-		//float lsb = (glyph.lsb/(float)mFontData.upm)*(squareSize/aspect);
+
+		//add char vertices - positions and uvs
+		addCharVertData(x-horPaddingNDC+lsbNDC,y-verPaddingNDC+yOffNDC,quadWidthNDC,quadHeightNDC,
+				glyph.uLeft,glyph.vBot,glyph.uRight,glyph.vTop);
 
 		//move cursor
-		float advanceWidth=advanceNDC+horPaddingNDC*0.5f-horPaddingNDC*0.5f;//+lsb;
-		x+=advanceWidth;//+lsb;
+		x+=advanceNDC;
 	}
 }
+
+void drawString(int num, float startX, float startY, float squareSize, int numChars=-1){
+	char text[15];
+	itoa(num,text,10);
+	//move cursor to start
+	float x = startX;
+	float y = startY;
+	int count = numChars==-1? strlen(text) : numChars;
+	for(int i=0; i<count; i++){
+		//get data for glyph
+		glyphData glyph = mFontData.gData[text[i]];
+
+		//get dimensions in UPM
+		short w = (glyph.xMax-glyph.xMin);
+		short h = (glyph.yMax-glyph.yMin);
+
+		//get percentage of M square UPMP
+		float charWidthUPMP = (w/(float)mFontData.upm);
+		float charHeightUPMP = (h/(float)mFontData.upm);
+		float lsbUPMP = (glyph.lsb/(float)mFontData.upm);
+		float yOffUPMP = (glyph.yMin/(float)mFontData.upm);
+		float advanceUPMP = (glyph.advance/(float)mFontData.upm);
+
+		//convert dimensions to NDC
+		float squareHeightNDC = squareSize;
+		float squareWidthNDC = squareSize/aspect;
+		float charWidthNDC = squareWidthNDC*charWidthUPMP;
+		float charHeightNDC = squareHeightNDC*charHeightUPMP;
+		float quadHeightNDC = charHeightNDC/(1.0-mFontData.padding);
+		float quadWidthNDC = charWidthNDC/(1.0-mFontData.padding);
+		float verPaddingNDC = (quadHeightNDC-charHeightNDC)*0.5f;
+		float horPaddingNDC = (quadWidthNDC-charWidthNDC)*0.5f;
+		float lsbNDC = lsbUPMP*squareWidthNDC;
+		float yOffNDC = yOffUPMP*squareHeightNDC;
+		float advanceNDC = advanceUPMP*squareWidthNDC;
+
+		//add char vertices - positions and uvs
+		addCharVertData(x-horPaddingNDC+lsbNDC,y-verPaddingNDC+yOffNDC,quadWidthNDC,quadHeightNDC,
+				glyph.uLeft,glyph.vBot,glyph.uRight,glyph.vTop);
+
+		//move cursor
+		x+=advanceNDC;
+	}
+}
+
+//vars
+char fps[50]; //size of the number
+int counter = 0;
+char helloWorld[50];
+float fpsTimer=0;
 
 // Start
 void initFontEditor(){
@@ -856,24 +890,20 @@ void initFontEditor(){
 	//importFont("fonts/source/Grethania Script Reguler.ttf");
 	//importFont("fonts/source/arial.ttf");
 	//importFont("fonts/source/times.ttf");
-	//addTriangle(-0.5,-0.5,0.0,0.5,0.5,-0.5);
-	//addChar(-0.5,-0.5,0.5,0.5);
-	//on char typed -> type character
 	loadFont("fonts/fontAtlas");
-	testTypeString("Hello World",-0.9f,0,0.5f);
-	testTypeString("The quick brown fox jumped over the lazy dog",-0.95f,-0.2,0.14f);
-	testTypeString("The quick brown fox jumped over the lazy dog",-0.95f,-0.4,0.05f);
-	//testTypeString("The quick",-1.0f,0,0.2f);
-	//testTypeString("THE QUICK BROWN FOX JUMPED OVER THE LAZY DOG",-1.0f,-0.1f,0.04f);
-	//testTypeString("HI!@#$%^&*()-=_+[{]}\\|'\";:,<.>/?",-1.0f,-0.2f,0.04f);
+	strcpy(fps,"....");
 }
 
 void updateFontEditor(){
 	setClearColor(vec4(0.3,0.3,0.3,1));
 
-	//maybe we should be able to draw a blank gui panel
-	//or even a sprite
-	//before we draw the text
+	strcpy(helloWorld,"Hello World: ");
+	itoa(counter,helloWorld+13,10);
+	drawString(helloWorld,-0.95f,0,0.3f);
+	drawString("The quick brown fox jumped over the lazy dog",-0.95f,-0.2,0.14f);
+	drawString("The quick brown fox jumped over the lazy dog",-0.95f,-0.4,0.05f);
+	drawString("1234567890 !@#$%^&*()-=_+[]{}\\|;:'\",.<>/?",-0.95f,-0.6,0.05f);
+
 
 	if(keyInput[32]==2)
 	{
@@ -893,8 +923,17 @@ void updateFontEditor(){
 	}
 	if(keyInput[8]==1){
 		printf("backspace\n");
-		testRemoveLastChar();
+		counter++;
+		//testRemoveLastChar();
 	}
+	fpsTimer+=deltaTime;
+	if(fpsTimer>1.0f){
+		float frameRate=1/deltaTime; 
+		sprintf(fps,"%f",frameRate);
+		fpsTimer=0;
+	}
+	drawString(fps,0.9f,0.9f,0.05f,4);
+	drawString(gpuClockFrequency,0.8f,0.8f,0.05f);
 }
 
 #endif

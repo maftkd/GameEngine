@@ -12,6 +12,9 @@ const float aspect = 16.0f/9.0f;
 bool fullScreen=false;
 bool initD3Buffers=false;
 
+//timing
+int gpuClockFrequency;
+
 //swap chain
 ID3D11Device* device= NULL;
 ID3D11DeviceContext* deviceContext= NULL;
@@ -233,17 +236,36 @@ struct renderCommands{
 
 	void reset(){
 		charVertsChanged=false;
+
+		//clear char array
+		numCharVerts=0;
 	}
 
 	void copy(renderCommands rcq){
 		clearColor=rcq.clearColor;
-		//copy verts
-		if(rcq.charVertsChanged){
+
+		//text vertices
+		bool textChange=false;
+		if(numCharVerts!=rcq.numCharVerts)
+		{
+			textChange=true;
+		}
+		else{
+			for(int i=0;i<rcq.numCharVerts*(bytesPerCharVert/4); i++){
+				if(fabsf(rcq.charVerts[i]-charVerts[i])>0.00001f){
+					textChange=true;
+					break;
+				}
+			}
+		}
+		charVertsChanged=textChange;
+		if(textChange)
+		{
+			printf("updating char vertex buffer\n");
 			for(int i=0;i<rcq.numCharVerts*(bytesPerCharVert/4); i++)
 				charVerts[i]=rcq.charVerts[i];
 			numCharVerts=rcq.numCharVerts;
 		}
-		charVertsChanged=rcq.charVertsChanged;
 	}
 
 	void swapTimeStamps(renderCommands* rcq){
@@ -274,7 +296,8 @@ bool getGpuTimeStamps(renderCommands rc){
 			UINT64 frameStart, frameEnd;
 			deviceContext->GetData(rc.start, &frameStart, sizeof(UINT64), 0);
 			deviceContext->GetData(rc.end, &frameEnd, sizeof(UINT64), 0);
-			float denom = float(tsDisjoint.Frequency);
+			gpuClockFrequency=tsDisjoint.Frequency;
+			float denom = float(gpuClockFrequency);
 			float gpuTimer = float(frameEnd-frameStart)/denom;
 			//printf("-GPU dt: %f\n",gpuTimer);
 		}
@@ -338,35 +361,6 @@ void setClearColor(vec4 col){
 	curFrameRenderCommands.clearColor=col;
 }
 
-void testAddChar(float left, float bottom, float width, float height,float uLeft,float vBot, float uRight, float vTop){
-	int startIndex=curFrameRenderCommands.numCharVerts*4;
-	curFrameRenderCommands.charVerts[startIndex]=left;
-	curFrameRenderCommands.charVerts[startIndex+1]=bottom;
-	curFrameRenderCommands.charVerts[startIndex+2]=uLeft;
-	curFrameRenderCommands.charVerts[startIndex+3]=vBot;
-	curFrameRenderCommands.charVerts[startIndex+4]=left;
-	curFrameRenderCommands.charVerts[startIndex+5]=bottom+height;
-	curFrameRenderCommands.charVerts[startIndex+6]=uLeft;
-	curFrameRenderCommands.charVerts[startIndex+7]=vTop;
-	curFrameRenderCommands.charVerts[startIndex+8]=left+width;
-	curFrameRenderCommands.charVerts[startIndex+9]=bottom;
-	curFrameRenderCommands.charVerts[startIndex+10]=uRight;
-	curFrameRenderCommands.charVerts[startIndex+11]=vBot;
-	curFrameRenderCommands.charVerts[startIndex+12]=left+width;
-	curFrameRenderCommands.charVerts[startIndex+13]=bottom+height;
-	curFrameRenderCommands.charVerts[startIndex+14]=uRight;
-	curFrameRenderCommands.charVerts[startIndex+15]=vTop;
-	curFrameRenderCommands.numCharVerts+=4;
-	curFrameRenderCommands.charVertsChanged=true;
-}
-
-void testRemoveLastChar(){
-	if(curFrameRenderCommands.numCharVerts>=4){
-		curFrameRenderCommands.numCharVerts-=4;
-		curFrameRenderCommands.charVertsChanged=true;
-	}
-}
-
 //todo think about this
 shader fontShader;
 void compileTestShader(){
@@ -406,7 +400,7 @@ DWORD WINAPI renderThread( LPVOID lpParam )
 			dstBox.back=1;
 			deviceContext->UpdateSubresource(charVertices,0,&dstBox,prevFrameRenderCommands.charVerts,0,0);
 			prevFrameRenderCommands.charVertsChanged=false;
-			printf("Updating subresource %d\n",dstBox.right);
+			//printf("Updating subresource %d\n",dstBox.right);
 		}
 
 		clearRenderTarget(prevFrameRenderCommands.clearColor);

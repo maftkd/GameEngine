@@ -17,6 +17,7 @@ int targetScreenHeight=1080;
 #include "io.h"
 #include "vector.h"
 #include "input.h"
+#include "imgui.h"
 #include "image.h"
 #include "font.h"
 #include "game.h"
