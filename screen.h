@@ -24,6 +24,9 @@ ID3D11RenderTargetView* renderTarget = NULL;
 //viewport
 D3D11_VIEWPORT viewport = {0};
 
+//blending
+ID3D11BlendState* default_blend_state;
+
 //buffer
 //temp
 ID3D11Buffer* charVertices;
@@ -104,6 +107,26 @@ void initSwapChain(HWND hwnd){
 	IDXGIFactory1* factory;
 	swapChain->GetParent(__uuidof (IDXGIFactory1), (void **) &factory);
     factory->MakeWindowAssociation(hwnd, DXGI_MWA_NO_WINDOW_CHANGES);
+}
+
+void initBlendStates(){
+	D3D11_BLEND_DESC bs = {0};
+	bs.RenderTarget[0].BlendEnable = true;
+
+	//srcAlpha*src.rgb + (1-srcAlpha)*dst.rgb
+	bs.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;
+	bs.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
+	bs.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
+
+	//force 1 alpha in destination
+	bs.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
+	bs.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ZERO;
+	bs.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
+
+	bs.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+	hr = device->CreateBlendState(&bs, &default_blend_state);
+	if(FAILED(hr))
+		printf("Failed creating blend state  %x\n",hr);
 }
 
 
@@ -264,6 +287,7 @@ bool getGpuTimeStamps(renderCommands rc){
 void initRenderer(HWND hwnd, int width, int height){
 	initSwapChain(hwnd);
 	initRenderBuffers(width,height);
+	initBlendStates();
 	prevFrameRenderCommands.init();
 	curFrameRenderCommands.init();
 
@@ -344,15 +368,15 @@ void testRemoveLastChar(){
 }
 
 //todo think about this
-shader testShader;
+shader fontShader;
 void compileTestShader(){
 	//temp - regardless of mode, just compile this test shader
-	testShader.compile(L"shaders/test.hlsl");
+	fontShader.compile(L"shaders/sdfFont.hlsl");
 	D3D11_INPUT_ELEMENT_DESC inputElementLayout[] = {
 		{ "POS", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
 		{ "TEX", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 }
 	};
-	testShader.setLayout(inputElementLayout, 2);
+	fontShader.setLayout(inputElementLayout, 2);
 }
 
 //todo think about this
@@ -387,8 +411,11 @@ DWORD WINAPI renderThread( LPVOID lpParam )
 
 		clearRenderTarget(prevFrameRenderCommands.clearColor);
 
+		//set blend state
+		deviceContext->OMSetBlendState(default_blend_state,NULL,0xffffffff);
+
 		//draw chars
-		testShader.use();
+		fontShader.use();
 		deviceContext->PSSetShaderResources(0,1,&fontRes);
 		deviceContext->IASetIndexBuffer(charIndices,DXGI_FORMAT_R32_UINT,0);
 		deviceContext->IASetVertexBuffers(0,1,&charVertices,&stride,&vertOffset );

@@ -84,6 +84,7 @@ typedef struct {
 	vec2 offset;
 	short leftSideBearing;
 	unsigned short advanceWidth;
+	float glyphScale;
 } simpleGlyph;
 
 
@@ -169,11 +170,15 @@ struct node{
 
 //simple func to pack the glyphs in a grid layout
 //also generates accompanying .fdat file
-void fontAtlasTest(simpleGlyph *glyphs,int texSize=512,float imageScale=0.1,float secondaryScale=0.75){
+void fontAtlasTest(simpleGlyph *glyphs,int texSize=512,float glyphSize=32,float secondaryScale=0.75){
 	//get bounds
 	for(int i=0; i<numChars;i++){
 		vec2 size = vec2(glyphs[i].xMax-glyphs[i].xMin,glyphs[i].yMax-glyphs[i].yMin);
 		//scale image down for faster testing
+		//todo, try and make these things square and see if it fixes the l's
+		float largeSide = max(size.x,size.y);
+		float imageScale=glyphSize/largeSide;
+		glyphs[i].glyphScale=imageScale;
 		size*=imageScale;
 		size.round();
 		//printf("%d,%f,%f\n",(i+32),size.x,size.y);
@@ -304,13 +309,13 @@ void fontAtlasTest(simpleGlyph *glyphs,int texSize=512,float imageScale=0.1,floa
 		for(int j=0;j<numContours;j++){
 			for(int k=0; k<numContourEdgeSegments[j];k++){
 				vec2 point = contours[j][k]+mainOffset;
-				point*=imageScale*secondaryScale;
+				point*=glyphs[i].glyphScale*secondaryScale;
 				point+=paddingOffset;
 				contours[j][k]=point;
 			}
 		}
 
-		float maxDist=min(paddingOffset.x,paddingOffset.y);
+		float maxDist=max(1,min(paddingOffset.x,paddingOffset.y));
 		//fill pixel array
 		int pixelStart=(int)glyphs[i].offset.y*texSize*3+(int)glyphs[i].offset.x*3;
 		//printf("size (%f,%f)\n",glyphs[i].size.x,glyphs[i].size.y);
@@ -375,13 +380,11 @@ void fontAtlasTest(simpleGlyph *glyphs,int texSize=512,float imageScale=0.1,floa
 	//then glyph data
 	for(int i=0; i<numChars; i++){
 		int gIndex = mapping[i];
-		printf("writing glyph data for %c\n",(gIndex+32));
 		//normalize pixel cords to UV cords
 		float uLeft=glyphs[i].offset.x/texSize;
 		float vBot=glyphs[i].offset.y/texSize;
 		float uRight=uLeft+glyphs[i].size.x/texSize;
 		float vTop=vBot+glyphs[i].size.y/texSize;
-		printf("bl: (%f,%f) tr: (%f,%f)\n",uLeft,vBot,uRight,vTop);
 		//copy uv cords
 		memcpy(&fontDataTest[headerSize+gIndex*glyphStride],&uLeft,4);
 		memcpy(&fontDataTest[headerSize+gIndex*glyphStride+4],&vBot,4);
@@ -710,7 +713,7 @@ void importFont(char* fontName){
 		}
 	}
 
-	fontAtlasTest(glyphs,512,0.1,0.75);
+	fontAtlasTest(glyphs,512,64,0.8);
 }
 
 //hmmm maybe these structs should go at the top?
@@ -839,7 +842,7 @@ void testTypeString(char* text, float startX, float startY, float squareSize){
 		//float lsb = (glyph.lsb/(float)mFontData.upm)*(squareSize/aspect);
 
 		//move cursor
-		float advanceWidth=advanceNDC+horPaddingNDC*0.5f;//+lsb;
+		float advanceWidth=advanceNDC+horPaddingNDC*0.5f-horPaddingNDC*0.5f;//+lsb;
 		x+=advanceWidth;//+lsb;
 	}
 }
@@ -847,18 +850,19 @@ void testTypeString(char* text, float startX, float startY, float squareSize){
 // Start
 void initFontEditor(){
 	printf("initializing font editor yo\n");
-	//importFont("fonts/Moonrising.ttf");
-	//importFont("fonts/Gorehand.otf");
+	//importFont("fonts/source/Moonrising.ttf");
+	//importFont("fonts/source/Gorehand.otf");
 	//importFont("fonts/source/Envy Code R.ttf");
-	importFont("fonts/source/Grethania Script Reguler.ttf");
-	//importFont("fonts/arial.ttf");
-	//importFont("fonts/times.ttf");
+	//importFont("fonts/source/Grethania Script Reguler.ttf");
+	//importFont("fonts/source/arial.ttf");
+	//importFont("fonts/source/times.ttf");
 	//addTriangle(-0.5,-0.5,0.0,0.5,0.5,-0.5);
 	//addChar(-0.5,-0.5,0.5,0.5);
 	//on char typed -> type character
 	loadFont("fonts/fontAtlas");
-	//testTypeString("Hello World",-1.0f,0,0.1f);
-	testTypeString("The quick brown fox jumped over the lazy dog",-0.95f,0,0.1f);
+	testTypeString("Hello World",-0.9f,0,0.5f);
+	testTypeString("The quick brown fox jumped over the lazy dog",-0.95f,-0.2,0.14f);
+	testTypeString("The quick brown fox jumped over the lazy dog",-0.95f,-0.4,0.05f);
 	//testTypeString("The quick",-1.0f,0,0.2f);
 	//testTypeString("THE QUICK BROWN FOX JUMPED OVER THE LAZY DOG",-1.0f,-0.1f,0.04f);
 	//testTypeString("HI!@#$%^&*()-=_+[{]}\\|'\";:,<.>/?",-1.0f,-0.2f,0.04f);
